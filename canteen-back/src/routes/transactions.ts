@@ -7,41 +7,58 @@ import { requireAuth } from '../middleware/auth';
 
 const router = express.Router();
 
-router.use(requireAuth); // Operators & admins
+router.use(requireAuth);
 
 router.get('/', async (req: Request, res: Response) => {
     try {
         const {
             page = '1',
             limit = '20',
-            date,           // YYYY-MM-DD format
-            employeeId,     // Specific employee _id
-            department,     // Department name (string)
-            search,         // Free text search in employee name
+            from,           // YYYY-MM-DD (start date, inclusive)
+            to,             // YYYY-MM-DD (end date, inclusive)
+            employeeId,
+            department,
+            search,
         } = req.query;
 
         const query: any = {};
 
-        // === Date Filter (required for your use cases) ===
-        if (date && typeof date === 'string') {
-            const start = new Date(date);
-            if (isNaN(start.getTime())) {
-                return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+        // === Date Range Filter ===
+        const now = new Date();
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        let rangeStart: Date = todayStart;
+        let rangeEnd: Date = todayEnd;
+
+        if (from && typeof from === 'string') {
+            const parsedFrom = new Date(from);
+            if (isNaN(parsedFrom.getTime())) {
+                return res.status(400).json({ error: 'Invalid "from" date format. Use YYYY-MM-DD' });
             }
-            start.setHours(0, 0, 0, 0);
-            const end = new Date(start);
-            end.setHours(23, 59, 59, 999);
-            query.timestamp = { $gte: start, $lte: end };
-        } else {
-            // If no date provided, default to today (optional – you can make it required)
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            query.timestamp = { $gte: today, $lt: tomorrow };
+            parsedFrom.setHours(0, 0, 0, 0);
+            rangeStart = parsedFrom;
         }
 
-        // === Filter by Specific Employee ===
+        if (to && typeof to === 'string') {
+            const parsedTo = new Date(to);
+            if (isNaN(parsedTo.getTime())) {
+                return res.status(400).json({ error: 'Invalid "to" date format. Use YYYY-MM-DD' });
+            }
+            parsedTo.setHours(23, 59, 59, 999);
+            rangeEnd = parsedTo;
+        }
+
+        // Validate range
+        if (rangeStart > rangeEnd) {
+            return res.status(400).json({ error: '"from" date cannot be after "to" date' });
+        }
+
+        query.timestamp = { $gte: rangeStart, $lte: rangeEnd };
+
+        // === Employee Filter ===
         if (employeeId && typeof employeeId === 'string') {
             if (!mongoose.Types.ObjectId.isValid(employeeId)) {
                 return res.status(400).json({ error: 'Invalid employeeId' });
@@ -49,33 +66,26 @@ router.get('/', async (req: Request, res: Response) => {
             query.employee = new mongoose.Types.ObjectId(employeeId);
         }
 
-        // === Filter by Department ===
+        // === Department Filter ===
         if (department && typeof department === 'string' && department.trim() !== '') {
             const employeesInDept = await Employee.find({
                 department: { $regex: new RegExp(`^${department.trim()}$`, 'i') },
             }).select('_id');
 
             if (employeesInDept.length === 0) {
-                return res.json({
-                    transactions: [],
-                    pagination: { page: 1, limit: 20, total: 0, pages: 0 },
-                });
+                return res.json({ transactions: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
             }
-
             query.employee = { $in: employeesInDept.map(e => e._id) };
         }
 
-        // === Free Text Search in Employee Name (optional bonus) ===
+        // === Name Search ===
         if (search && typeof search === 'string' && search.trim() !== '') {
             const matchingEmployees = await Employee.find({
                 name: { $regex: search.trim(), $options: 'i' },
             }).select('_id');
 
             if (matchingEmployees.length === 0) {
-                return res.json({
-                    transactions: [],
-                    pagination: { page: 1, limit: 20, total: 0, pages: 0 },
-                });
+                return res.json({ transactions: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
             }
             query.employee = { $in: matchingEmployees.map(e => e._id) };
         }
@@ -85,7 +95,7 @@ router.get('/', async (req: Request, res: Response) => {
         const limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10) || 20));
         const skip = (pageNum - 1) * limitNum;
 
-        // Fetch transactions
+        // Execute
         const transactions = await Transaction.find(query)
             .populate('employee', 'name department deviceId')
             .populate('foodItem', 'name code')
@@ -97,6 +107,10 @@ router.get('/', async (req: Request, res: Response) => {
 
         res.json({
             transactions,
+            dateRange: {
+                from: rangeStart.toISOString().split('T')[0],
+                to: rangeEnd.toISOString().split('T')[0],
+            },
             pagination: {
                 page: pageNum,
                 limit: limitNum,
