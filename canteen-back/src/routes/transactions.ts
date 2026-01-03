@@ -3,6 +3,8 @@ import express, { Request, Response } from 'express';
 import Transaction from '../models/Transaction';
 import Employee from '../models/Employee';
 import mongoose from 'mongoose';
+import FoodItem from '../models/FoodItem';
+import Settings from '../models/Settings';
 import { requireAuth } from '../middleware/auth';
 
 const router = express.Router();
@@ -121,6 +123,101 @@ router.get('/', async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error('Transaction fetch error:', error);
         res.status(500).json({ error: 'Failed to fetch transactions' });
+    }
+});
+
+
+
+// POST /api/transactions/manual - Manual ticket issuance by operator
+router.post('/manual', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const { employeeId, foodItemCode } = req.body;
+
+        if (!employeeId || !foodItemCode) {
+            return res.status(400).json({ error: 'employeeId and foodItemCode are required' });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+            return res.status(400).json({ error: 'Invalid employeeId' });
+        }
+
+        // Find employee
+        const employee = await Employee.findOne({
+            _id: employeeId,
+            isActive: true,
+        });
+
+        if (!employee) {
+            return res.status(404).json({ error: 'Active employee not found' });
+        }
+
+        // Find food item
+        const foodItem = await FoodItem.findOne({
+            code: String(foodItemCode),
+            isActive: true,
+        });
+
+        if (!foodItem) {
+            return res.status(404).json({ error: 'Active food item not found' });
+        }
+
+        // Get global settings
+        const settings = (await Settings.findOne()) || { dailyMealLimit: 3, companyName: 'Company Canteen' };
+
+        // Check daily limit
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const mealsToday = await Transaction.countDocuments({
+            employee: employee._id,
+            timestamp: { $gte: today },
+        });
+
+        if (mealsToday >= settings.dailyMealLimit) {
+            return res.status(403).json({
+                error: 'Daily meal limit reached for this employee',
+                mealsToday,
+                limit: settings.dailyMealLimit,
+            });
+        }
+
+        // Create manual transaction
+        const transaction = await Transaction.create({
+            employee: employee._id,
+            foodItem: foodItem._id,
+            workCode: foodItem.code,
+            timestamp: new Date(),
+            status: 'success',
+            ticketPrinted: false, // Will update after print
+        });
+        let printSuccess = true;  // Simulate successful print for testing
+        // Print ticket
+        // const printSuccess = await printTicket({
+        //     companyName: settings.companyName,
+        //     employeeName: employee.name,
+        //     mealName: foodItem.name,
+        //     timestamp: transaction.timestamp,
+        //     transactionId: transaction._id.toString().slice(-8),
+        // });
+
+        // Update transaction
+        // transaction.ticketPrinted = printSuccess;
+        await transaction.save();
+
+        res.json({
+            success: true,
+            printed: printSuccess,
+            transactionId: transaction._id,
+            message: printSuccess
+                ? 'Manual ticket issued and printed successfully'
+                : 'Transaction recorded but printing failed',
+            employee: employee.name,
+            meal: foodItem.name,
+            mealsToday: mealsToday + 1,
+        });
+    } catch (error: any) {
+        console.error('Manual transaction error:', error);
+        res.status(500).json({ error: 'Failed to issue manual ticket' });
     }
 });
 

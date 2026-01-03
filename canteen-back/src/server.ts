@@ -39,6 +39,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/food-items', foodItemRoutes);
 app.use('/api/transactions', transactionRoutes);
 
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
