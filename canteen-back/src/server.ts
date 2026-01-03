@@ -1,13 +1,15 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import sessionConfig from './config/session.ts';
-import connectDB from './config/db.ts';
+import sessionConfig from './config/session';
+import connectDB from './config/db';
 import mongoose from 'mongoose';
-
-import authRoutes from './routes/auth.ts';
-import employeeRoutes from './routes/employees.ts';
-
+import authRoutes from './routes/auth';
+import foodItemRoutes from './routes/foodItems';
+import userRoutes from './routes/users';
+import employeeRoutes from './routes/employees';
+import settingsRoutes from './routes/settings';
+import transactionRoutes from './routes/transactions';
 dotenv.config();
 
 const app = express();
@@ -26,13 +28,18 @@ app.use(sessionConfig);
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/employees', employeeRoutes);
-
-// Health check endpoint (good practice)
+app.use('/api/settings', settingsRoutes);
+// Health check endpoint 
 app.get('/health', (_req, res) => {
     res.status(200).json({ status: 'OK', db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' });
 });
 
+app.use('/api/food-items', foodItemRoutes);
+app.use('/api/transactions', transactionRoutes);
+
+// Start server
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });

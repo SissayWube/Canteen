@@ -1,21 +1,23 @@
+// src/models/Employee.ts
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IEmployee extends Document {
-    deviceId: string;
+    deviceId: string;      // Must match the User ID/PIN enrolled on ZKTeco device
     name: string;
-    department?: string;
-    balance: number;
+    department: string;
     isActive: boolean;
     enrolledAt: Date;
 }
 
-const employeeSchema: Schema = new Schema({
-    deviceId: { type: String, required: true, unique: true },
+const employeeSchema: Schema<IEmployee> = new Schema({
+    deviceId: { type: String, required: true, unique: true, trim: true },
     name: { type: String, required: true },
-    department: String,
-    balance: { type: Number, default: 0 },
+    department: { type: String, required: true },
     isActive: { type: Boolean, default: true },
     enrolledAt: { type: Date, default: Date.now },
 });
+
+// Fast lookup by deviceId (used on every scan)
+employeeSchema.index({ deviceId: 1 });
 
 export default mongoose.model<IEmployee>('Employee', employeeSchema);

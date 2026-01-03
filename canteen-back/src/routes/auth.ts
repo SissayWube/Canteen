@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import Admin from '../models/Admin.js';
+import User from '../models/User';
 import bcrypt from 'bcryptjs';
 
 const router = express.Router();
@@ -12,15 +12,15 @@ interface LoginRequest extends Request {
 router.post('/login', async (req: LoginRequest, res: Response) => {
     try {
         const { username, password } = req.body;
-        const admin = await Admin.findOne({ username });
-        if (!admin || !(await bcrypt.compare(password, admin.password))) {
+        const user = await User.findOne({ username });
+        if (!user || !(await bcrypt.compare(password, user.password))) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        req.session.adminId = admin._id.toString();
-        req.session.username = admin.username;
+        req.session.userId = user._id.toString();
+        req.session.username = user.username;
 
-        res.json({ message: 'Login successful', admin: { username: admin.username } });
+        res.json({ message: 'Login successful', user: { username: user.username } });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
@@ -28,10 +28,10 @@ router.post('/login', async (req: LoginRequest, res: Response) => {
 
 // Current user
 router.get('/me', (req: Request, res: Response) => {
-    if (!req.session.adminId) {
+    if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
-    res.json({ admin: { username: req.session.username } });
+    res.json({ user: { username: req.session.username } });
 });
 
 // Logout

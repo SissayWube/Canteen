@@ -1,8 +1,9 @@
-import { IAdmin } from '../models/Admin';
+import { IUser } from '../models/User';
 
 declare module 'express-session' {
-    interface SessionData {
-        adminId: string;
-        username: string;
-    }
+  interface SessionData {
+    userId: string;
+    username: string;
+    role: 'admin' | 'operator';
+  }
 }
