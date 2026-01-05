@@ -10,14 +10,13 @@ export interface IEmployee extends Document {
 }
 
 const employeeSchema: Schema<IEmployee> = new Schema({
-    deviceId: { type: String, required: true, unique: true, trim: true },
+    deviceId: { type: String, required: true, unique: true, trim: true, index: true },
     name: { type: String, required: true },
     department: { type: String, required: true },
     isActive: { type: Boolean, default: true },
     enrolledAt: { type: Date, default: Date.now },
 });
 
-// Fast lookup by deviceId (used on every scan)
-employeeSchema.index({ deviceId: 1 });
+
 
 export default mongoose.model<IEmployee>('Employee', employeeSchema);

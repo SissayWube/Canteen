@@ -14,7 +14,6 @@ const settingsSchema: Schema<ISettings> = new Schema({
   updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: { updatedAt: true, createdAt: true } });
 
-// Ensure only one settings document exists
-settingsSchema.index({ _id: 1 }, { unique: true });
+
 
 export default mongoose.model<ISettings>('Settings', settingsSchema);
