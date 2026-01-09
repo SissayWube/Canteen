@@ -1,13 +1,7 @@
 // src/contexts/AuthContext.tsx
-import { createContext, useState, useEffect, useContext } from 'react';  
-import type { ReactNode } from 'react';  
-import api from '../api/api';
-
-interface User {
-  username: string;
-  role: 'admin' | 'operator';
-  fullName?: string;
-}
+import { createContext, useState, useEffect, useContext } from 'react';
+import type { ReactNode } from 'react';
+import { authApi, User } from '../api/auth';
 
 interface AuthContextType {
   user: User | null;
@@ -32,8 +26,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      const { data } = await api.get('/auth/me');
-      setUser(data.user);
+      const user = await authApi.getCurrentUser();
+      setUser(user);
     } catch (err) {
       setUser(null);
     } finally {
@@ -42,12 +36,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const login = async (username: string, password: string) => {
-    const { data } = await api.post('/auth/login', { username, password });
-    setUser(data.user);
+    const user = await authApi.login(username, password);
+    setUser(user);
   };
 
   const logout = async () => {
-    await api.post('/auth/logout');
+    await authApi.logout();
     setUser(null);
   };
 

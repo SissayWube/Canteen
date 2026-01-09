@@ -6,7 +6,10 @@ const router = express.Router();
 
 const requireAdmin = (req: Request, _res: Response, next: NextFunction) => {
     if (req.session.role !== 'admin') {
-        return _res.status(403).json({ error: 'Admin access required' });
+        return _res.status(403).json({
+            error: 'Admin access required',
+            details: `User role is: ${req.session.role || 'undefined'}`
+        });
     }
     next();
 };

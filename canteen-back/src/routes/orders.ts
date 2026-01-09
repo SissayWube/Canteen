@@ -1,11 +1,13 @@
-// src/routes/transactions.ts
+// src/routes/orders.ts
 import express, { Request, Response } from 'express';
-import Transaction from '../models/Transaction';
+import Order from '../models/Order';
 import Employee from '../models/Employee';
 import mongoose from 'mongoose';
 import FoodItem from '../models/FoodItem';
 import Settings from '../models/Settings';
 import { requireAuth } from '../middleware/auth';
+import { printTicket } from '../services/printerService';
+import { io } from '../server';
 
 const router = express.Router();
 
@@ -75,7 +77,7 @@ router.get('/', async (req: Request, res: Response) => {
             }).select('_id');
 
             if (employeesInDept.length === 0) {
-                return res.json({ transactions: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
+                return res.json({ orders: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
             }
             query.employee = { $in: employeesInDept.map(e => e._id) };
         }
@@ -98,17 +100,18 @@ router.get('/', async (req: Request, res: Response) => {
         const skip = (pageNum - 1) * limitNum;
 
         // Execute
-        const transactions = await Transaction.find(query)
+        const orders = await Order.find(query)
             .populate('employee', 'name department deviceId')
             .populate('foodItem', 'name code')
+            .populate('operator', 'username')
             .sort({ timestamp: -1 })
             .skip(skip)
             .limit(limitNum);
 
-        const total = await Transaction.countDocuments(query);
+        const total = await Order.countDocuments(query);
 
         res.json({
-            transactions,
+            orders,
             dateRange: {
                 from: rangeStart.toISOString().split('T')[0],
                 to: rangeEnd.toISOString().split('T')[0],
@@ -121,14 +124,14 @@ router.get('/', async (req: Request, res: Response) => {
             },
         });
     } catch (error: any) {
-        console.error('Transaction fetch error:', error);
-        res.status(500).json({ error: 'Failed to fetch transactions' });
+        console.error('Order fetch error:', error);
+        res.status(500).json({ error: 'Failed to fetch orders' });
     }
 });
 
 
 
-// POST /api/transactions/manual - Manual ticket issuance by operator
+// POST /api/orders/manual - Manual ticket issuance by operator
 router.post('/manual', requireAuth, async (req: Request, res: Response) => {
     try {
         const { employeeId, foodItemCode } = req.body;
@@ -162,13 +165,17 @@ router.post('/manual', requireAuth, async (req: Request, res: Response) => {
         }
 
         // Get global settings
-        const settings = (await Settings.findOne()) || { dailyMealLimit: 3, companyName: 'Company Canteen' };
+        const settings = await Settings.findOne();
+
+        if (!settings) {
+            return res.status(500).json({ error: 'System settings not initialized' });
+        }
 
         // Check daily limit
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const mealsToday = await Transaction.countDocuments({
+        const mealsToday = await Order.countDocuments({
             employee: employee._id,
             timestamp: { $gte: today },
         });
@@ -181,43 +188,128 @@ router.post('/manual', requireAuth, async (req: Request, res: Response) => {
             });
         }
 
-        // Create manual transaction
-        const transaction = await Transaction.create({
+        // Create manual order
+        const order = await Order.create({
             employee: employee._id,
             foodItem: foodItem._id,
+            price: foodItem.price,
+            subsidy: foodItem.subsidy || 0,
+            currency: foodItem.currency || 'ETB',
             workCode: foodItem.code,
             timestamp: new Date(),
-            status: 'success',
-            ticketPrinted: false, // Will update after print
+            status: 'approved',
+            type: 'manual',
+            ticketPrinted: false,
+            operator: req.session.userId,
         });
-        let printSuccess = true;  // Simulate successful print for testing
-        // Print ticket
-        // const printSuccess = await printTicket({
-        //     companyName: settings.companyName,
-        //     employeeName: employee.name,
-        //     mealName: foodItem.name,
-        //     timestamp: transaction.timestamp,
-        //     transactionId: transaction._id.toString().slice(-8),
-        // });
 
-        // Update transaction
-        // transaction.ticketPrinted = printSuccess;
-        await transaction.save();
+        // Print ticket
+        const printSuccess = await printTicket({
+            companyName: settings.companyName,
+            employeeName: employee.name,
+            employeeId: employee.deviceId,
+            mealName: foodItem.name,
+            timestamp: order.timestamp,
+            orderId: order._id.toString().slice(-8),
+            operatorName: req.session.username,
+        });
+
+        order.ticketPrinted = printSuccess;
+        await order.save();
+
+        // Notify dashboard of new order
+        if (io) {
+            io.emit('newPendingOrder', { orderId: order._id });
+        }
 
         res.json({
             success: true,
             printed: printSuccess,
-            transactionId: transaction._id,
+            orderId: order._id,
             message: printSuccess
                 ? 'Manual ticket issued and printed successfully'
-                : 'Transaction recorded but printing failed',
+                : 'Order recorded but printing failed',
             employee: employee.name,
             meal: foodItem.name,
             mealsToday: mealsToday + 1,
         });
     } catch (error: any) {
-        console.error('Manual transaction error:', error);
+        console.error('Manual order error:', error);
         res.status(500).json({ error: 'Failed to issue manual ticket' });
+    }
+});
+
+
+// POST /api/transactions/:id/approve
+router.post('/:id/approve', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const order = await Order.findById(req.params.id)
+            .populate('employee', 'name deviceId')
+            .populate('foodItem', 'name');
+
+        if (!order) return res.status(404).json({ error: 'Transaction not found' });
+        if (order.status !== 'pending') {
+            return res.status(400).json({ error: 'Transaction already processed' });
+        }
+
+        // Update status
+        order.status = 'approved';
+        order.operator = new mongoose.Types.ObjectId(req.session.userId as string);
+
+        // Now print
+        const settings = await Settings.findOne() || { companyName: 'Company Canteen' };
+        const printSuccess = await printTicket({
+            companyName: settings.companyName,
+            employeeName: (order.employee as any).name,
+            employeeId: (order.employee as any).deviceId,
+            mealName: (order.foodItem as any).name,
+            timestamp: order.timestamp,
+            orderId: order._id.toString().slice(-8),
+            operatorName: req.session.username,
+        });
+
+        order.ticketPrinted = printSuccess;
+        await order.save();
+
+        // Notify all clients
+        if (io) {
+            io.emit('orderApproved', {
+                orderId: order._id,
+                printed: printSuccess,
+            });
+        }
+
+        res.json({ success: true, printed: printSuccess });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST /api/orders/:id/reject
+router.post('/:id/reject', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const order = await Order.findById(req.params.id);
+
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        if (order.status !== 'pending') {
+            return res.status(400).json({ error: 'Order already processed' });
+        }
+
+        // Update status to rejected
+        order.status = 'rejected';
+        order.operator = new mongoose.Types.ObjectId(req.session.userId as string);
+        await order.save();
+
+        // Notify all clients
+        if (io) {
+            io.emit('orderRejected', {
+                orderId: order._id,
+            });
+        }
+
+        res.json({ success: true });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
     }
 });
 

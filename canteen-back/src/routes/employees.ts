@@ -4,16 +4,26 @@ import { requireAuth } from '../middleware/auth';
 
 const router = express.Router();
 
+
 // Only admins can manage employees
 const requireAdmin = (req: Request, _res: Response, next: NextFunction) => {
     if (req.session.role !== 'admin') {
-        return _res.status(403).json({ error: 'Forbidden: Admin access required' });
+        return _res.status(403).json({
+            error: 'Forbidden: Admin access required',
+            details: `User role is: ${req.session.role || 'undefined'}`
+        });
     }
     next();
 };
 
 router.use(requireAuth);
 router.use(requireAdmin);
+
+// Create Express routes for Employee CRUD operations
+// a routee group for /api/employees
+
+
+
 
 // GET all employees
 router.get('/', async (_req: Request, res: Response) => {

@@ -1,36 +1,41 @@
 import express, { Request, Response } from 'express';
 import Employee from '../models/Employee';
 import FoodItem from '../models/FoodItem';
-import Transaction from '../models/Transaction';
+import Order from '../models/Order';
 // import { printTicket } from '../services/printerService';
-import { requireDeviceKey } from '../middleware/deviceAuth.ts';
-import Settings from '../models/Settings.ts';
-
+import { requireDeviceKey } from '../middleware/deviceAuth';
+import Settings from '../models/Settings';
+import { io } from '../server';
 const router = express.Router();
 
 // Public endpoint — only accessible with correct DEVICE_API_KEY
-router.post('/event', requireDeviceKey, async (req: Request, res: Response) => {
+// router.post('/', requireDeviceKey, async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
+
     try {
         const { userId, workCode, verifyTime } = req.body;
+
 
         // Basic validation
         if (!userId || !workCode) {
             return res.status(400).json({ error: 'Missing userId or workCode' });
         }
 
-        // 1. Find employee by deviceId (userId from ZKTeco = our deviceId field)
+        // 1. Find employee by deviceId(employee id) (userId from ZKTeco = our deviceId field)
         const employee = await Employee.findOne({ deviceId: String(userId), isActive: true });
         if (!employee) {
             return res.status(404).json({ error: 'Employee not found or inactive' });
         }
+
 
         const settings = await Settings.findOne() || { dailyMealLimit: 3 };
         // Count meals today
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const mealsToday = await Transaction.countDocuments({
+        const mealsToday = await Order.countDocuments({
             employee: employee._id,
+            status: 'approved',
             timestamp: { $gte: today },
         });
 
@@ -42,72 +47,41 @@ router.post('/event', requireDeviceKey, async (req: Request, res: Response) => {
             });
         }
 
-
         // 2. Find active food item by work code
         const foodItem = await FoodItem.findOne({ code: String(workCode), isActive: true });
         if (!foodItem) {
             return res.status(404).json({ error: 'Invalid or inactive meal code' });
         }
 
-        // 3. Optional: Enforce daily meal limit
-        // const today = new Date();
-        // today.setHours(0, 0, 0, 0);
-
-        // const mealsToday = await Transaction.countDocuments({
-        //     employee: employee._id,
-        //     timestamp: { $gte: today },
-        // });
-
-        // if (employee.dailyLimit && mealsToday >= employee.dailyLimit) {
-        //     return res.status(403).json({
-        //         error: 'Daily meal limit reached',
-        //         mealsToday,
-        //         limit: employee.dailyLimit,
-        //     });
-        // }
-        // 4. Create transaction record
-        const transaction = await Transaction.create({
+        // 3. Create order record
+        const order = await Order.create({
             employee: employee._id,
             foodItem: foodItem._id,
+            price: foodItem.price,
+            subsidy: foodItem.subsidy || 0,
+            currency: foodItem.currency || 'ETB',
             workCode: String(workCode),
-            timestamp: verifyTime ? new Date(verifyTime) : new Date(),
-            status: 'success',
-            ticketPrinted: false, // We'll update this after printing
-            amountDeducted: foodItem.price - (foodItem.subsidy || 0),
+            timestamp: new Date(),
+            status: 'pending',
+            type: 'automatic',
+            ticketPrinted: false,
         });
 
-        // 5. TODO: Trigger thermal printer (next step)
-        // ... after creating transaction
-        // const printSuccess = await printTicket({
-        //     companyName: 'Your Company Canteen',
-        //     employeeName: employee.name,
-        //     mealName: foodItem.name,
-        //     timestamp: transaction.timestamp,
-        //     transactionId: transaction._id.toString(),
-        // });
+        // 4. Emit new pending order to operator    
+        if (io) {
+            io.emit('newPendingOrder', {
+                orderId: order._id,
+                employeeName: employee.name,
+                mealName: foodItem.name,
+                time: order.timestamp,
+            });
+        }
 
-        // // Update transaction with print status
-        // transaction.ticketPrinted = printSuccess;
-        // await transaction.save();
-
-        // res.json({
-        //     success: true,
-        //     transactionId: transaction._id,
-        //     message: 'Event processed',
-        //     employee: employee.name,
-        //     meal: foodItem.name,
-        //     printed: printSuccess,
-        // });
-
-        // For now, just acknowledge
-        console.log(`Meal issued: ${employee.name} - ${foodItem.name}`);
-
+        // 5. Return success response   
         res.json({
             success: true,
-            transactionId: transaction._id,
-            message: 'Event processed',
-            employee: employee.name,
-            meal: foodItem.name,
+            message: 'Order received - awaiting operator approval',
+            transactionId: order._id,
         });
     } catch (error: any) {
         console.error('Device event error:', error);

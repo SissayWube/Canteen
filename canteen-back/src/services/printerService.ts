@@ -3,9 +3,11 @@ import { ThermalPrinter, PrinterTypes, CharacterSet, BreakLine } from 'node-ther
 interface PrintTicketData {
     companyName: string;
     employeeName: string;
+    employeeId: string;
     mealName: string;
     timestamp: Date;
-    transactionId: string;
+    orderId: string;
+    operatorName?: string;
 }
 
 export const printTicket = async (data: PrintTicketData): Promise<boolean> => {
@@ -43,9 +45,13 @@ export const printTicket = async (data: PrintTicketData): Promise<boolean> => {
         // Body
         printer.alignLeft();
         printer.println(`Employee: ${data.employeeName}`);
+        printer.println(`ID:       ${data.employeeId}`);
         printer.println(`Meal:     ${data.mealName}`);
         printer.println(`Time:     ${data.timestamp.toLocaleString()}`);
-        printer.println(`Ticket ID: ${data.transactionId}`);
+        printer.println(`Ticket ID: ${data.orderId}`);
+        if (data.operatorName) {
+            printer.println(`Operator: ${data.operatorName}`);
+        }
 
         printer.println('------------------------------');
         printer.alignCenter();

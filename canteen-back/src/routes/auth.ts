@@ -19,8 +19,12 @@ router.post('/login', async (req: LoginRequest, res: Response) => {
 
         req.session.userId = user._id.toString();
         req.session.username = user.username;
+        req.session.role = user.role;
 
-        res.json({ message: 'Login successful', user: { username: user.username } });
+        req.session.save((err) => {
+            if (err) return res.status(500).json({ error: 'Session save failed' });
+            res.json({ message: 'Login successful', user: { username: user.username, role: user.role } });
+        });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
@@ -31,7 +35,29 @@ router.get('/me', (req: Request, res: Response) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
-    res.json({ user: { username: req.session.username } });
+    res.json({ user: { username: req.session.username, role: req.session.role } });
+});
+
+// Change Password
+router.post('/change-password', async (req: Request, res: Response) => {
+    try {
+        if (!req.session.userId) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+        const { currentPassword, newPassword } = req.body;
+        const user = await User.findById(req.session.userId);
+
+        if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+            return res.status(401).json({ error: 'Invalid current password' });
+        }
+
+        user.password = await bcrypt.hash(newPassword, 12);
+        await user.save();
+
+        res.json({ message: 'Password updated successfully' });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Logout

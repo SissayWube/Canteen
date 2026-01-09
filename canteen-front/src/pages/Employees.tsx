@@ -1,16 +1,8 @@
 // src/pages/Employees.tsx
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Switch } from '@mui/material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import api from '../api/api';
-
-interface Employee {
-  _id: string;
-  deviceId: string;
-  name: string;
-  department: string;
-  isActive: boolean;
-}
+import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
+import { employeesApi, Employee } from '../api/employees';
 
 const Employees: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -24,7 +16,7 @@ const Employees: React.FC = () => {
 
   const fetchEmployees = async () => {
     try {
-      const { data } = await api.get('/employees');
+      const data = await employeesApi.getAll();
       setEmployees(data);
     } catch (err) {
       console.error('Failed to fetch employees');
@@ -42,9 +34,9 @@ const Employees: React.FC = () => {
   const handleSubmit = async () => {
     try {
       if (selectedEmployee) {
-        await api.put(`/employees/${selectedEmployee._id}`, formData);
+        await employeesApi.update(selectedEmployee._id, formData);
       } else {
-        await api.post('/employees', formData);
+        await employeesApi.create(formData);
       }
       fetchEmployees();
       handleClose();
@@ -55,7 +47,7 @@ const Employees: React.FC = () => {
 
   const handleToggleActive = async (id: string, isActive: boolean) => {
     try {
-      await api.put(`/employees/${id}`, { isActive: !isActive });
+      await employeesApi.toggleActive(id, !isActive);
       fetchEmployees();
     } catch (err) {
       console.error('Failed to toggle active');
@@ -66,6 +58,12 @@ const Employees: React.FC = () => {
     { field: 'deviceId', headerName: 'Device ID', width: 150 },
     { field: 'name', headerName: 'Name', width: 200 },
     { field: 'department', headerName: 'Department', width: 150 },
+    {
+      field: 'enrolledAt',
+      headerName: 'Enrolled',
+      width: 200,
+      valueFormatter: (value: string | null) => value ? new Date(value).toLocaleDateString() : '',
+    },
     {
       field: 'isActive',
       headerName: 'Active',
@@ -91,10 +89,13 @@ const Employees: React.FC = () => {
       <Box sx={{ height: 600, width: '100%' }}>
         <DataGrid
           rows={employees}
+          getRowId={(row) => row._id}
           columns={columns}
           loading={false}
           pageSizeOptions={[10, 25, 50]}
           disableRowSelectionOnClick
+          slots={{ toolbar: GridToolbar }}
+          slotProps={{ toolbar: { showQuickFilter: true } }}
         />
       </Box>
 

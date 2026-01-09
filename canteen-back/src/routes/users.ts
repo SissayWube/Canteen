@@ -8,7 +8,10 @@ const router = express.Router();
 // Middleware: Only admins can manage users
 const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
     if (req.session.role !== 'admin') {
-        return res.status(403).json({ error: 'Forbidden: Admin access required' });
+        return res.status(403).json({
+            error: 'Forbidden: Admin access required',
+            details: `User role is: ${req.session.role || 'undefined'}`
+        });
     }
     next();
 };
