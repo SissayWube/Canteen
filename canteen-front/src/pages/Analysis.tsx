@@ -1,3 +1,4 @@
+// src/pages/Analysis.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Typography, TextField, Button, Grid, CircularProgress, MenuItem, Paper, Autocomplete } from '@mui/material';
 import { DataGrid, GridToolbar, GridFooter, GridColDef } from '@mui/x-data-grid';
@@ -6,7 +7,7 @@ import { Print as PrintIcon, PictureAsPdf, TableView } from '@mui/icons-material
 import logo from '../assets/phibelalogo.png';
 import dayjs, { Dayjs } from 'dayjs';
 import api from '../api/api';
-import { employeesApi, Employee } from '../api/employees';
+import { customersApi, Customer } from '../api/customers';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { saveAs } from 'file-saver';
@@ -15,7 +16,7 @@ import * as XLSX from 'xlsx';
 interface OrderRow {
     _id: string;
     timestamp: string;
-    employee: {
+    customer: {
         name: string;
         department: string;
     };
@@ -28,7 +29,6 @@ interface OrderRow {
     price: number;
     subsidy: number;
 }
-
 
 
 function CustomFooter(props: any) {
@@ -53,10 +53,10 @@ function CustomFooter(props: any) {
 const Analysis: React.FC = () => {
     const [from, setFrom] = useState<Dayjs | null>(null);
     const [to, setTo] = useState<Dayjs | null>(null);
-    const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+    const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [selectedDepartment, setSelectedDepartment] = useState('');
     const [data, setData] = useState<OrderRow[]>([]);
-    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [customers, setCustomers] = useState<Customer[]>([]);
     const [departments, setDepartments] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -68,9 +68,9 @@ const Analysis: React.FC = () => {
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                const emps = await employeesApi.getAll();
-                setEmployees(emps);
-                const uniqueDeps = Array.from(new Set(emps.map(e => e.department))).sort();
+                const custs = await customersApi.getAll();
+                setCustomers(custs);
+                const uniqueDeps = Array.from(new Set(custs.map(c => c.department))).sort();
                 setDepartments(uniqueDeps);
             } catch (error) {
                 console.error('Failed to load filter data', error);
@@ -85,7 +85,7 @@ const Analysis: React.FC = () => {
             const params = new URLSearchParams({ type: 'orders' });
             if (from) params.append('from', from.format('YYYY-MM-DD'));
             if (to) params.append('to', to.format('YYYY-MM-DD'));
-            if (selectedEmployee) params.append('employeeId', selectedEmployee._id);
+            if (selectedCustomer) params.append('customerId', selectedCustomer._id);
             if (selectedDepartment) params.append('department', selectedDepartment);
             const { data } = await api.get(`/analysis?${params.toString()}`);
             setData(data);
@@ -124,9 +124,6 @@ const Analysis: React.FC = () => {
             doc.line(leftMargin + col1Width + col2Width, 10, leftMargin + col1Width + col2Width, 40); // Line 2
 
             // Col 1: Logo
-            // Note: Since 'logo' is a path/url, we might need to handle it. 
-            // If it's a dataURI it works instantly. If it's a URL, addImage might fail if not loaded.
-            // For safety, we try-catch adding the image or just put placeholder text if it fails.
             try {
                 // Assuming 'logo' from import is a valid URL/Path handled by vite
                 const img = new Image();
@@ -186,8 +183,8 @@ const Analysis: React.FC = () => {
             // --- Data Table ---
             const tableData = data.map((row) => [
                 dayjs(row.timestamp).format('DD/MM/YYYY HH:mm'),
-                row.employee?.name || 'Unknown',
-                row.employee?.department || 'Unknown',
+                row.customer?.name || 'Unknown',
+                row.customer?.department || 'Unknown',
                 row.foodItem?.name || 'Unknown',
                 row.operator?.username || 'N/A',
                 row.price,
@@ -195,7 +192,7 @@ const Analysis: React.FC = () => {
             ]);
 
             autoTable(doc, {
-                head: [['Date', 'Employee', 'Department', 'Item', 'Operator', 'Price', 'Subsidy']],
+                head: [['Date', 'Customer', 'Department', 'Item', 'Operator', 'Price', 'Subsidy']],
                 body: tableData,
                 startY: 50,
                 theme: 'grid',
@@ -245,14 +242,14 @@ const Analysis: React.FC = () => {
             ws_data.push([]); // Blank row
 
             // Data Headers
-            ws_data.push(['Date', 'Employee', 'Department', 'Item', 'Operator', 'Price', 'Subsidy']);
+            ws_data.push(['Date', 'Customer', 'Department', 'Item', 'Operator', 'Price', 'Subsidy']);
 
             // Data Rows
             data.forEach(row => {
                 ws_data.push([
                     dayjs(row.timestamp).format('DD/MM/YYYY HH:mm'),
-                    row.employee?.name || 'Unknown',
-                    row.employee?.department || 'Unknown',
+                    row.customer?.name || 'Unknown',
+                    row.customer?.department || 'Unknown',
                     row.foodItem?.name || 'Unknown',
                     row.operator?.username || 'N/A',
                     row.price,
@@ -283,7 +280,7 @@ const Analysis: React.FC = () => {
             // Set column widths
             ws['!cols'] = [
                 { wch: 18 }, // Date
-                { wch: 20 }, // Employee
+                { wch: 20 }, // Customer
                 { wch: 15 }, // Department
                 { wch: 20 }, // Item
                 { wch: 15 }, // Operator
@@ -313,16 +310,16 @@ const Analysis: React.FC = () => {
             valueFormatter: (value: string) => dayjs(value).format('DD/MM/YYYY HH:mm'),
         },
         {
-            field: 'employee.name',
-            headerName: 'Employee',
+            field: 'customer.name',
+            headerName: 'Customer',
             flex: 1.5,
-            valueGetter: (_: any, row: OrderRow) => row.employee?.name || 'Unknown',
+            valueGetter: (_: any, row: OrderRow) => row.customer?.name || 'Unknown',
         },
         {
-            field: 'employee.department',
+            field: 'customer.department',
             headerName: 'Department',
             flex: 1.5,
-            valueGetter: (_: any, row: OrderRow) => row.employee?.department || 'Unknown',
+            valueGetter: (_: any, row: OrderRow) => row.customer?.department || 'Unknown',
         },
         {
             field: 'foodItem.name',
@@ -493,11 +490,11 @@ const Analysis: React.FC = () => {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 3 }}>
                     <Autocomplete
-                        options={employees}
+                        options={customers}
                         getOptionLabel={(option) => option.name}
-                        value={selectedEmployee}
-                        onChange={(_, newValue) => setSelectedEmployee(newValue)}
-                        renderInput={(params) => <TextField {...params} label="Employee" fullWidth />}
+                        value={selectedCustomer}
+                        onChange={(_, newValue) => setSelectedCustomer(newValue)}
+                        renderInput={(params) => <TextField {...params} label="Customer" fullWidth />}
                         fullWidth
                     />
                 </Grid>
@@ -521,7 +518,7 @@ const Analysis: React.FC = () => {
                         onClick={() => {
                             setFrom(null);
                             setTo(null);
-                            setSelectedEmployee(null);
+                            setSelectedCustomer(null);
                             setSelectedDepartment('');
                         }}
                     >
@@ -533,41 +530,37 @@ const Analysis: React.FC = () => {
                 </Grid>
             </Grid>
 
-            {
-                loading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
-                        <CircularProgress />
-                    </Box>
-                ) : (
-                    <>
-                        <Paper className="print-content" sx={{ height: 600, width: '100%', '@media print': { height: 'auto', boxShadow: 'none' } }}>
-                            <DataGrid
-                                rows={data}
-                                autoHeight={false} // Default false, overridden by CSS if needed, but for print we usually want autoHeight. Let's rely on print media query to possibly force height auto if MUI supports it, or simple hack.
-                                sx={{ '@media print': { height: 'auto', '& .MuiDataGrid-virtualScroller': { overflow: 'visible' } } }}
-                                columns={analysisColumns}
-                                getRowId={(row) => row._id}
-                                disableRowSelectionOnClick
-                                slots={{
-                                    toolbar: GridToolbar,
-                                    footer: CustomFooter
-                                }}
-                                slotProps={{
-                                    toolbar: {
-                                        showQuickFilter: true,
-                                    },
-                                    footer: {
-                                        totalMeals,
-                                        totalAmount,
-                                        totalSubsidy
-                                    } as any
-                                }}
-                            />
-                        </Paper>
-
-                    </>
-                )
-            }
+            {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
+                    <CircularProgress />
+                </Box>
+            ) : (
+                <Paper className="print-content" sx={{ height: 600, width: '100%', '@media print': { height: 'auto', boxShadow: 'none' } }}>
+                    <DataGrid
+                        rows={data}
+                        density="compact"
+                        autoHeight={false} // Default false, overridden by CSS if needed, but for print we usually want autoHeight. Let's rely on print media query to possibly force height auto if MUI supports it, or simple hack.
+                        sx={{ '@media print': { height: 'auto', '& .MuiDataGrid-virtualScroller': { overflow: 'visible' } } }}
+                        columns={analysisColumns}
+                        getRowId={(row) => row._id}
+                        disableRowSelectionOnClick
+                        slots={{
+                            toolbar: GridToolbar,
+                            footer: CustomFooter
+                        }}
+                        slotProps={{
+                            toolbar: {
+                                showQuickFilter: true,
+                            },
+                            footer: {
+                                totalMeals,
+                                totalAmount,
+                                totalSubsidy
+                            } as any
+                        }}
+                    />
+                </Paper>
+            )}
         </Box >
     );
 };

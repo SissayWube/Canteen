@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IOrder extends Document {
-  employee: mongoose.Types.ObjectId;     // Ref to Employee
+  customer: mongoose.Types.ObjectId;     // Ref to Customer
   foodItem: mongoose.Types.ObjectId;    // Ref to FoodItem (optional if code not found)
   price: number;                       // Full price at time of transaction
   subsidy: number;                     // Subsidy at time of transaction
@@ -15,7 +15,7 @@ export interface IOrder extends Document {
 }
 
 const orderSchema: Schema<IOrder> = new Schema({
-  employee: { type: Schema.Types.ObjectId, ref: 'Employee', required: true },
+  customer: { type: Schema.Types.ObjectId, ref: 'Customer', required: true },
   foodItem: { type: Schema.Types.ObjectId, ref: 'FoodItem' },
   price: { type: Number, required: true },
   subsidy: { type: Number, default: 0 },
@@ -29,7 +29,7 @@ const orderSchema: Schema<IOrder> = new Schema({
 });
 
 // Compound index for common queries (reports)
-orderSchema.index({ employee: 1, timestamp: -1 });
+orderSchema.index({ customer: 1, timestamp: -1 });
 orderSchema.index({ timestamp: -1 });
 
 export default mongoose.model<IOrder>('Order', orderSchema);

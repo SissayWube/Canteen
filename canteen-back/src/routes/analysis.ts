@@ -1,7 +1,7 @@
 // src/routes/analysis.ts
 import express, { Request, Response } from 'express';
 import Order from '../models/Order';
-import Employee from '../models/Employee';
+import Customer from '../models/Customer';
 import mongoose from 'mongoose';
 import { requireAuth } from '../middleware/auth';
 
@@ -24,7 +24,7 @@ router.use(requireAdmin);
 // GET /api/analysis?type=department&from=2026-01-01&to=2026-01-31
 router.get('/', async (req: Request, res: Response) => {
     try {
-        const { type = 'department', from, to, employeeId, department } = req.query;
+        const { type = 'department', from, to, customerId, department } = req.query;
 
         const match: any = {};
         if (from || to) {
@@ -37,21 +37,21 @@ router.get('/', async (req: Request, res: Response) => {
             }
         }
 
-        if (employeeId) {
-            match['employee._id'] = new mongoose.Types.ObjectId(employeeId as string);
+        if (customerId) {
+            match['customer._id'] = new mongoose.Types.ObjectId(customerId as string);
         }
 
         if (department) {
-            match['employee.department'] = department;
+            match['customer.department'] = department;
         }
 
         let groupBy;
         switch (type) {
             case 'department':
-                groupBy = '$employee.department';
+                groupBy = '$customer.department';
                 break;
-            case 'employee':
-                groupBy = '$employee._id';
+            case 'customer':
+                groupBy = '$customer._id';
                 break;
             case 'date':
                 groupBy = { $dateToString: { format: '%Y-%m-%d', date: '$timestamp' } };
@@ -70,8 +70,8 @@ router.get('/', async (req: Request, res: Response) => {
 
         if (groupBy === 'orders') {
             aggregation = await Order.aggregate([
-                { $lookup: { from: 'employees', localField: 'employee', foreignField: '_id', as: 'employee' } },
-                { $unwind: '$employee' },
+                { $lookup: { from: 'customers', localField: 'customer', foreignField: '_id', as: 'customer' } },
+                { $unwind: '$customer' },
                 // Add foodItem lookup
                 { $lookup: { from: 'fooditems', localField: 'foodItem', foreignField: '_id', as: 'foodItem' } },
                 { $unwind: { path: '$foodItem', preserveNullAndEmptyArrays: true } },
@@ -84,8 +84,8 @@ router.get('/', async (req: Request, res: Response) => {
                     $project: {
                         _id: 1,
                         timestamp: 1,
-                        'employee.name': 1,
-                        'employee.department': 1,
+                        'customer.name': 1,
+                        'customer.department': 1,
                         'foodItem.name': 1,
                         price: 1,
                         subsidy: 1,
@@ -95,8 +95,8 @@ router.get('/', async (req: Request, res: Response) => {
             ]);
         } else {
             aggregation = await Order.aggregate([
-                { $lookup: { from: 'employees', localField: 'employee', foreignField: '_id', as: 'employee' } },
-                { $unwind: '$employee' },
+                { $lookup: { from: 'customers', localField: 'customer', foreignField: '_id', as: 'customer' } },
+                { $unwind: '$customer' },
                 { $match: match },
                 {
                     $group: {
@@ -110,14 +110,14 @@ router.get('/', async (req: Request, res: Response) => {
             ]);
         }
 
-        if (type === 'employee' && aggregation.length > 0) {
-            // Resolve employee names
-            const employeeIds = aggregation.map(a => a._id).filter(id => id !== null);
-            const employees = await Employee.find({ _id: { $in: employeeIds } }).select('name');
-            const employeeMap = new Map(employees.map(e => [e._id.toString(), e.name]));
+        if (type === 'customer' && aggregation.length > 0) {
+            // Resolve customer names
+            const customerIds = aggregation.map(a => a._id).filter(id => id !== null);
+            const customers = await Customer.find({ _id: { $in: customerIds } }).select('name');
+            const customerMap = new Map(customers.map(c => [c._id.toString(), c.name]));
             aggregation.forEach(a => {
                 if (a._id) {
-                    a._id = employeeMap.get(a._id.toString()) || a._id;
+                    a._id = customerMap.get(a._id.toString()) || a._id;
                 }
             });
         }

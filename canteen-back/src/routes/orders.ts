@@ -1,7 +1,7 @@
 // src/routes/orders.ts
 import express, { Request, Response } from 'express';
 import Order from '../models/Order';
-import Employee from '../models/Employee';
+import Customer from '../models/Customer';
 import mongoose from 'mongoose';
 import FoodItem from '../models/FoodItem';
 import Settings from '../models/Settings';
@@ -20,7 +20,7 @@ router.get('/', async (req: Request, res: Response) => {
             limit = '20',
             from,           // YYYY-MM-DD (start date, inclusive)
             to,             // YYYY-MM-DD (end date, inclusive)
-            employeeId,
+            customerId,
             department,
             search,
         } = req.query;
@@ -62,36 +62,36 @@ router.get('/', async (req: Request, res: Response) => {
 
         query.timestamp = { $gte: rangeStart, $lte: rangeEnd };
 
-        // === Employee Filter ===
-        if (employeeId && typeof employeeId === 'string') {
-            if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-                return res.status(400).json({ error: 'Invalid employeeId' });
+        // === Customer Filter ===
+        if (customerId && typeof customerId === 'string') {
+            if (!mongoose.Types.ObjectId.isValid(customerId)) {
+                return res.status(400).json({ error: 'Invalid customerId' });
             }
-            query.employee = new mongoose.Types.ObjectId(employeeId);
+            query.customer = new mongoose.Types.ObjectId(customerId);
         }
 
         // === Department Filter ===
         if (department && typeof department === 'string' && department.trim() !== '') {
-            const employeesInDept = await Employee.find({
+            const customersInDept = await Customer.find({
                 department: { $regex: new RegExp(`^${department.trim()}$`, 'i') },
             }).select('_id');
 
-            if (employeesInDept.length === 0) {
+            if (customersInDept.length === 0) {
                 return res.json({ orders: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
             }
-            query.employee = { $in: employeesInDept.map(e => e._id) };
+            query.customer = { $in: customersInDept.map(c => c._id) };
         }
 
         // === Name Search ===
         if (search && typeof search === 'string' && search.trim() !== '') {
-            const matchingEmployees = await Employee.find({
+            const matchingCustomers = await Customer.find({
                 name: { $regex: search.trim(), $options: 'i' },
             }).select('_id');
 
-            if (matchingEmployees.length === 0) {
+            if (matchingCustomers.length === 0) {
                 return res.json({ transactions: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
             }
-            query.employee = { $in: matchingEmployees.map(e => e._id) };
+            query.customer = { $in: matchingCustomers.map(c => c._id) };
         }
 
         // Pagination
@@ -101,7 +101,7 @@ router.get('/', async (req: Request, res: Response) => {
 
         // Execute
         const orders = await Order.find(query)
-            .populate('employee', 'name department deviceId')
+            .populate('customer', 'name department deviceId')
             .populate('foodItem', 'name code')
             .populate('operator', 'username')
             .sort({ timestamp: -1 })
@@ -134,24 +134,24 @@ router.get('/', async (req: Request, res: Response) => {
 // POST /api/orders/manual - Manual ticket issuance by operator
 router.post('/manual', requireAuth, async (req: Request, res: Response) => {
     try {
-        const { employeeId, foodItemCode } = req.body;
+        const { customerId, foodItemCode } = req.body;
 
-        if (!employeeId || !foodItemCode) {
-            return res.status(400).json({ error: 'employeeId and foodItemCode are required' });
+        if (!customerId || !foodItemCode) {
+            return res.status(400).json({ error: 'customerId and foodItemCode are required' });
         }
 
-        if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-            return res.status(400).json({ error: 'Invalid employeeId' });
+        if (!mongoose.Types.ObjectId.isValid(customerId)) {
+            return res.status(400).json({ error: 'Invalid customerId' });
         }
 
-        // Find employee
-        const employee = await Employee.findOne({
-            _id: employeeId,
+        // Find customer
+        const customer = await Customer.findOne({
+            _id: customerId,
             isActive: true,
         });
 
-        if (!employee) {
-            return res.status(404).json({ error: 'Active employee not found' });
+        if (!customer) {
+            return res.status(404).json({ error: 'Active customer not found' });
         }
 
         // Find food item
@@ -176,13 +176,13 @@ router.post('/manual', requireAuth, async (req: Request, res: Response) => {
         today.setHours(0, 0, 0, 0);
 
         const mealsToday = await Order.countDocuments({
-            employee: employee._id,
+            customer: customer._id,
             timestamp: { $gte: today },
         });
 
         if (mealsToday >= settings.dailyMealLimit) {
             return res.status(403).json({
-                error: 'Daily meal limit reached for this employee',
+                error: 'Daily meal limit reached for this customer',
                 mealsToday,
                 limit: settings.dailyMealLimit,
             });
@@ -190,7 +190,7 @@ router.post('/manual', requireAuth, async (req: Request, res: Response) => {
 
         // Create manual order
         const order = await Order.create({
-            employee: employee._id,
+            customer: customer._id,
             foodItem: foodItem._id,
             price: foodItem.price,
             subsidy: foodItem.subsidy || 0,
@@ -206,8 +206,8 @@ router.post('/manual', requireAuth, async (req: Request, res: Response) => {
         // Print ticket
         const printSuccess = await printTicket({
             companyName: settings.companyName,
-            employeeName: employee.name,
-            employeeId: employee.deviceId,
+            employeeName: customer.name,
+            employeeId: customer.deviceId,
             mealName: foodItem.name,
             timestamp: order.timestamp,
             orderId: order._id.toString().slice(-8),
@@ -229,7 +229,7 @@ router.post('/manual', requireAuth, async (req: Request, res: Response) => {
             message: printSuccess
                 ? 'Manual ticket issued and printed successfully'
                 : 'Order recorded but printing failed',
-            employee: employee.name,
+            customer: customer.name,
             meal: foodItem.name,
             mealsToday: mealsToday + 1,
         });
@@ -244,7 +244,7 @@ router.post('/manual', requireAuth, async (req: Request, res: Response) => {
 router.post('/:id/approve', requireAuth, async (req: Request, res: Response) => {
     try {
         const order = await Order.findById(req.params.id)
-            .populate('employee', 'name deviceId')
+            .populate('customer', 'name deviceId')
             .populate('foodItem', 'name');
 
         if (!order) return res.status(404).json({ error: 'Transaction not found' });
@@ -260,8 +260,8 @@ router.post('/:id/approve', requireAuth, async (req: Request, res: Response) => 
         const settings = await Settings.findOne() || { companyName: 'Company Canteen' };
         const printSuccess = await printTicket({
             companyName: settings.companyName,
-            employeeName: (order.employee as any).name,
-            employeeId: (order.employee as any).deviceId,
+            employeeName: (order.customer as any).name,
+            employeeId: (order.customer as any).deviceId,
             mealName: (order.foodItem as any).name,
             timestamp: order.timestamp,
             orderId: order._id.toString().slice(-8),

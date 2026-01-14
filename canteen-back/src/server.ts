@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 import authRoutes from './routes/auth';
 import foodItemRoutes from './routes/foodItems';
 import userRoutes from './routes/users';
-import employeeRoutes from './routes/employees';
+import customerRoutes from './routes/customers';
 import settingsRoutes from './routes/settings';
 import orderRoutes from './routes/orders';
 import { Server as HttpServer } from 'http';
@@ -54,7 +54,7 @@ app.use(getSessionMiddleware(mongoose));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/employees', employeeRoutes);
+app.use('/api/customers', customerRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use("/api/events", eventRoutes);
 app.use('/api/food-items', foodItemRoutes);

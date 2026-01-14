@@ -19,7 +19,6 @@ import {
     Settings as SettingsIcon,
     BarChart as BarChartIcon,
     ManageAccounts as ManageAccountsIcon,
-    Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -31,21 +30,21 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ width, isCollapsed }) => {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
     const location = useLocation();
 
     const commonItems = [
         { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
         { text: 'Manual Order', icon: <PrintIcon />, path: '/manual-issue' },
-        { text: 'Analysis', icon: <BarChartIcon />, path: '/analysis' },
-        { text: 'Employees', icon: <PeopleIcon />, path: '/employees' },
-        { text: 'Food Items', icon: <FoodIcon />, path: '/food-items' },
-        { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
-        { text: 'Logout', icon: <LogoutIcon />, path: '#', onClick: logout },
+        // { text: 'Logout', icon: <LogoutIcon />, path: '#', onClick: logout },
     ];
 
     const adminOnlyItems: typeof commonItems = [
-        { text: 'Manage Operators', icon: <ManageAccountsIcon />, path: '/users' },
+        { text: 'Analysis', icon: <BarChartIcon />, path: '/analysis' },
+        { text: 'Operators', icon: <ManageAccountsIcon />, path: '/users' },
+        { text: 'Customers', icon: <PeopleIcon />, path: '/customers' },
+        { text: 'Food Items', icon: <FoodIcon />, path: '/food-items' },
+        { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
     ];
 
     const menuItems = user?.role === 'admin' ? [...commonItems, ...adminOnlyItems] : commonItems;

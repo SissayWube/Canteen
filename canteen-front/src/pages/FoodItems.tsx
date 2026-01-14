@@ -108,6 +108,7 @@ const FoodItems: React.FC = () => {
       <Button variant="contained" onClick={() => handleOpen()} sx={{ mb: 2 }}>Add Meal</Button>
       <Box sx={{ height: 600, width: '100%' }}>
         <DataGrid
+          density="compact"
           rows={foodItems}
           getRowId={(row) => row._id}
           columns={columns}

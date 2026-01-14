@@ -1,6 +1,6 @@
 // src/pages/Settings.tsx
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, TextField, Button, Alert, CircularProgress, Paper, Divider } from '@mui/material';
+import { Box, Typography, TextField, Button, Alert, CircularProgress, Paper } from '@mui/material';
 import api from '../api/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -106,7 +106,7 @@ const Settings: React.FC = () => {
               fullWidth
               margin="normal"
               inputProps={{ min: 1 }}
-              helperText="Maximum meals per employee per day"
+              helperText="Maximum meals per customer per day"
             />
 
             <Button

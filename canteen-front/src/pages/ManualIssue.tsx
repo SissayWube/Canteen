@@ -1,15 +1,15 @@
 // src/pages/ManualIssue.tsx
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Select, MenuItem, Button, FormControl, InputLabel, Alert, Grid, Paper, Divider, Autocomplete, TextField, CircularProgress } from '@mui/material';
-import { employeesApi, Employee } from '../api/employees';
+import { customersApi, Customer } from '../api/customers';
 import { foodItemsApi, FoodItem } from '../api/foodItems';
 import { ordersApi } from '../api/orders';
 import { useAuth } from '../contexts/AuthContext';
 
 const ManualIssue: React.FC = () => {
-    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [customers, setCustomers] = useState<Customer[]>([]);
     const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
-    const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+    const [selectedCustomerId, setSelectedCustomerId] = useState('');
     const [selectedFoodCode, setSelectedFoodCode] = useState('');
     const [selectedDepartment, setSelectedDepartment] = useState<string>('');
     const [loading, setLoading] = useState(false);
@@ -17,40 +17,40 @@ const ManualIssue: React.FC = () => {
     const { user } = useAuth();
 
     // Derived data
-    const departments = Array.from(new Set(employees.map(e => e.department))).sort();
-    const filteredEmployees = selectedDepartment
-        ? employees.filter(e => e.department === selectedDepartment)
-        : employees;
+    const departments = Array.from(new Set(customers.map(c => c.department))).sort();
+    const filteredCustomers = selectedDepartment
+        ? customers.filter(c => c.department === selectedDepartment)
+        : customers;
 
     // Derived states for preview
-    const selectedEmployee = employees.find(e => e._id === selectedEmployeeId);
+    const selectedCustomer = customers.find(c => c._id === selectedCustomerId);
     const selectedFood = foodItems.find(f => f.code === selectedFoodCode);
     const currentDateTime = new Date().toLocaleString();
 
     useEffect(() => {
         Promise.all([
-            employeesApi.getAll(),
+            customersApi.getAll(),
             foodItemsApi.getAll(),
-        ]).then(([empData, foodData]) => {
-            setEmployees(empData);
+        ]).then(([custData, foodData]) => {
+            setCustomers(custData);
             setFoodItems(foodData);
         });
     }, []);
 
     const handleSubmit = async () => {
-        if (!selectedEmployeeId || !selectedFoodCode) {
-            setMessage({ type: 'error', text: 'Please select employee and meal' });
+        if (!selectedCustomerId || !selectedFoodCode) {
+            setMessage({ type: 'error', text: 'Please select customer and meal' });
             return;
         }
 
         setLoading(true);
         try {
             const data = await ordersApi.issueManual({
-                employeeId: selectedEmployeeId,
+                customerId: selectedCustomerId,
                 foodItemCode: selectedFoodCode,
             });
             setMessage({ type: 'success', text: data.message });
-            setSelectedEmployeeId('');
+            setSelectedCustomerId('');
             setSelectedFoodCode('');
         } catch (err: any) {
             setMessage({ type: 'error', text: err.response?.data?.error || 'Print failed' });
@@ -64,7 +64,7 @@ const ManualIssue: React.FC = () => {
             <Box sx={{ mb: 4 }}>
                 <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>Manual Order Issue</Typography>
                 <Typography variant="body1" color="text.secondary">
-                    Select an employee and meal to manually generate an order and print a ticket.
+                    Select a customer and meal to manually generate an order and print a ticket.
                 </Typography>
             </Box>
 
@@ -89,7 +89,7 @@ const ManualIssue: React.FC = () => {
                                         label="Filter by Department"
                                         onChange={(e) => {
                                             setSelectedDepartment(e.target.value);
-                                            setSelectedEmployeeId('');
+                                            setSelectedCustomerId('');
                                         }}
                                         sx={{ borderRadius: '12px' }}
                                     >
@@ -103,19 +103,19 @@ const ManualIssue: React.FC = () => {
 
                             <Grid size={{ xs: 12 }}>
                                 <Autocomplete
-                                    options={filteredEmployees}
+                                    options={filteredCustomers}
                                     getOptionLabel={(option) => `${option.name} (${option.deviceId})`}
-                                    value={employees.find(e => e._id === selectedEmployeeId) || null}
+                                    value={customers.find(c => c._id === selectedCustomerId) || null}
                                     onChange={(_, newValue) => {
-                                        setSelectedEmployeeId(newValue ? newValue._id : '');
+                                        setSelectedCustomerId(newValue ? newValue._id : '');
                                     }}
                                     renderInput={(params) => (
                                         <TextField
                                             {...params}
-                                            label="Search Employee"
+                                            label="Search Customer"
                                             placeholder="Type name or device ID..."
                                             variant="outlined"
-                                            helperText={selectedDepartment ? `Showing employees in ${selectedDepartment}` : "Type to search by name"}
+                                            helperText={selectedDepartment ? `Showing customers in ${selectedDepartment}` : "Type to search by name"}
                                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
                                         />
                                     )}
@@ -162,7 +162,7 @@ const ManualIssue: React.FC = () => {
                             variant="contained"
                             color="primary"
                             onClick={handleSubmit}
-                            disabled={loading || !selectedEmployeeId || !selectedFoodCode}
+                            disabled={loading || !selectedCustomerId || !selectedFoodCode}
                             fullWidth
                             size="large"
                             sx={{
@@ -222,59 +222,59 @@ const ManualIssue: React.FC = () => {
                                 }
                             }}
                         >
-                            <Box sx={{ textAlign: 'center', mb: 3 }}>
+                            <Box sx={{ textAlign: 'center', mb: 1 }}>
                                 <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: 1 }}>CANTEEN</Typography>
-                                <Typography variant="h6" sx={{ fontWeight: 500, fontSize: '1rem' }}>OFFICIAL RECEIPT</Typography>
+                                <Typography variant="h6" sx={{ fontWeight: 500, fontSize: '0.9rem', mt: -0.5 }}>RECEIPT</Typography>
                                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>{currentDateTime}</Typography>
                             </Box>
 
-                            <Divider sx={{ my: 1, borderStyle: 'dashed', borderColor: 'divider' }} />
+                            <Divider sx={{ my: 0.5, borderStyle: 'dashed', borderColor: 'divider' }} />
 
-                            <Box sx={{ my: 3 }}>
-                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>EMPLOYEE DETAILS</Typography>
-                                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5 }}>
-                                    {selectedEmployee ? selectedEmployee.name.toUpperCase() : '----------------'}
+                            <Box sx={{ my: 1.5 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>CUSTOMER DETAILS</Typography>
+                                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0, fontSize: '1.1rem' }}>
+                                    {selectedCustomer ? selectedCustomer.name.toUpperCase() : '----------------'}
                                 </Typography>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-                                    <Typography variant="body2">ID:</Typography>
-                                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>{selectedEmployee ? selectedEmployee.deviceId : '-------'}</Typography>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0 }}>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>ID:</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 'medium', fontSize: '0.8rem' }}>{selectedCustomer ? selectedCustomer.deviceId : '-------'}</Typography>
                                 </Box>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <Typography variant="body2">DEPT:</Typography>
-                                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>{selectedEmployee ? selectedEmployee.department : '----------------'}</Typography>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>DEPT:</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 'medium', fontSize: '0.8rem' }}>{selectedCustomer ? selectedCustomer.department : '----------------'}</Typography>
                                 </Box>
                             </Box>
 
-                            <Box sx={{ my: 2, bgcolor: 'action.hover', p: 2, borderRadius: 1 }}>
+                            <Box sx={{ my: 1, bgcolor: 'action.hover', p: 1.5, borderRadius: 1 }}>
                                 <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>MEAL INFORMATION</Typography>
-                                <Typography variant="h5" sx={{ fontWeight: 800, color: 'primary.dark', mt: 1 }}>
+                                <Typography variant="h5" sx={{ fontWeight: 800, color: 'primary.dark', mt: 0.5 }}>
                                     {selectedFood ? selectedFood.name : '--------------'}
                                 </Typography>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-                                    <Typography variant="body2">Base Price:</Typography>
-                                    <Typography variant="body2">{selectedFood ? `${selectedFood.currency} ${selectedFood.price.toFixed(2)}` : '---'}</Typography>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>Base Price:</Typography>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{selectedFood ? `${selectedFood.currency} ${selectedFood.price.toFixed(2)}` : '---'}</Typography>
                                 </Box>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <Typography variant="body2">Subsidy:</Typography>
-                                    <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 'bold' }}>
+                                    <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>Subsidy:</Typography>
+                                    <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 'bold', fontSize: '0.8rem' }}>
                                         {selectedFood ? `-${selectedFood.currency} ${selectedFood.subsidy.toFixed(2)}` : '---'}
                                     </Typography>
                                 </Box>
-                                <Divider sx={{ my: 1 }} />
+                                <Divider sx={{ my: 0.5 }} />
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>TOTAL:</Typography>
-                                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>TOTAL:</Typography>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
                                         {selectedFood ? `${selectedFood.currency} ${(selectedFood.price - selectedFood.subsidy).toFixed(2)}` : '---'}
                                     </Typography>
                                 </Box>
                             </Box>
 
-                            <Box sx={{ mt: 'auto', textAlign: 'center', pt: 3 }}>
-                                <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
+                            <Box sx={{ mt: 'auto', textAlign: 'center', pt: 1.5 }}>
+                                <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 'bold', fontSize: '0.7rem' }}>
                                     CODE: {selectedFood ? selectedFood.code : '---------'}<br />
                                     OPERATOR: {user?.username?.toUpperCase() || '---'}
                                 </Typography>
-                                <Typography variant="body2" sx={{ mt: 1, fontSize: '0.7rem', color: 'text.secondary' }}>
+                                <Typography variant="body2" sx={{ mt: 0.5, fontSize: '0.65rem', color: 'text.secondary' }}>
                                     * PLEASE RETAIN THIS TICKET FOR MEAL COLLECTION *
                                 </Typography>
                             </Box>

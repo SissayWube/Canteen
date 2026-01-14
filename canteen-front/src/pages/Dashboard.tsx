@@ -148,10 +148,10 @@ const Dashboard: React.FC = () => {
                             <Typography variant="h6">Recent Orders </Typography>
                         </Box>
                         <TableContainer sx={{ maxHeight: 'calc(100vh - 280px)' }}>
-                            <Table stickyHeader>
+                            <Table stickyHeader size="small">
                                 <TableHead>
                                     <TableRow>
-                                        <TableCell>Employee</TableCell>
+                                        <TableCell>Customer</TableCell>
                                         <TableCell>Department</TableCell>
                                         <TableCell>Meal</TableCell>
                                         <TableCell>Meal Code</TableCell>
@@ -173,9 +173,9 @@ const Dashboard: React.FC = () => {
                                                 className={highlightOrderId === tx._id ? 'new-order-row' : ''}
                                             >
                                                 <TableCell>
-                                                    <Typography variant="subtitle2" fontWeight="bold">{tx.employee.name}</Typography>
+                                                    <Typography variant="subtitle2" fontWeight="bold">{tx.customer.name}</Typography>
                                                 </TableCell>
-                                                <TableCell>{tx.employee.department}</TableCell>
+                                                <TableCell>{tx.customer.department}</TableCell>
                                                 <TableCell>{tx.foodItem?.name || 'Unknown'}</TableCell>
                                                 <TableCell><Typography variant="body2" sx={{ fontFamily: 'monospace', bgcolor: 'action.hover', px: 1, borderRadius: 1, display: 'inline-block' }}>{tx.workCode}</Typography></TableCell>
                                                 <TableCell align="right">{tx.currency} {tx.price.toFixed(2)}</TableCell>
@@ -229,9 +229,9 @@ const Dashboard: React.FC = () => {
 
                             <Grid container spacing={4}>
                                 <Grid size={{ xs: 12, sm: 6 }}>
-                                    <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 'bold' }}>Employee Details</Typography>
-                                    <Typography variant="h6" sx={{ mt: 0.5 }}>{selectedOrder.employee.name}</Typography>
-                                    <Typography variant="body2" color="text.secondary">{selectedOrder.employee.department}</Typography>
+                                    <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 'bold' }}>Customer Details</Typography>
+                                    <Typography variant="h6" sx={{ mt: 0.5 }}>{selectedOrder.customer.name}</Typography>
+                                    <Typography variant="body2" color="text.secondary">{selectedOrder.customer.department}</Typography>
                                 </Grid>
 
                                 <Grid size={{ xs: 12, sm: 6 }}>
@@ -318,7 +318,7 @@ const Dashboard: React.FC = () => {
                 <DialogTitle sx={{ fontWeight: 'bold' }}>Reject Order?</DialogTitle>
                 <DialogContent>
                     <Typography>
-                        Are you sure you want to reject this order for <strong>{selectedOrder?.employee?.name}</strong>?
+                        Are you sure you want to reject this order for <strong>{selectedOrder?.customer?.name}</strong>?
                         This action cannot be undone.
                     </Typography>
                 </DialogContent>

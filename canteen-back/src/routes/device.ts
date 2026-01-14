@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import Employee from '../models/Employee';
+import Customer from '../models/Customer';
 import FoodItem from '../models/FoodItem';
 import Order from '../models/Order';
 // import { printTicket } from '../services/printerService';
@@ -21,10 +21,10 @@ router.post('/', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Missing userId or workCode' });
         }
 
-        // 1. Find employee by deviceId(employee id) (userId from ZKTeco = our deviceId field)
-        const employee = await Employee.findOne({ deviceId: String(userId), isActive: true });
-        if (!employee) {
-            return res.status(404).json({ error: 'Employee not found or inactive' });
+        // 1. Find customer by deviceId(customer id) (userId from ZKTeco = our deviceId field)
+        const customer = await Customer.findOne({ deviceId: String(userId), isActive: true });
+        if (!customer) {
+            return res.status(404).json({ error: 'Customer not found or inactive' });
         }
 
 
@@ -34,7 +34,7 @@ router.post('/', async (req: Request, res: Response) => {
         today.setHours(0, 0, 0, 0);
 
         const mealsToday = await Order.countDocuments({
-            employee: employee._id,
+            customer: customer._id,
             status: 'approved',
             timestamp: { $gte: today },
         });
@@ -55,7 +55,7 @@ router.post('/', async (req: Request, res: Response) => {
 
         // 3. Create order record
         const order = await Order.create({
-            employee: employee._id,
+            customer: customer._id,
             foodItem: foodItem._id,
             price: foodItem.price,
             subsidy: foodItem.subsidy || 0,
@@ -71,7 +71,7 @@ router.post('/', async (req: Request, res: Response) => {
         if (io) {
             io.emit('newPendingOrder', {
                 orderId: order._id,
-                employeeName: employee.name,
+                customerName: customer.name,
                 mealName: foodItem.name,
                 time: order.timestamp,
             });

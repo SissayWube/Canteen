@@ -2,8 +2,8 @@ import { ThermalPrinter, PrinterTypes, CharacterSet, BreakLine } from 'node-ther
 
 interface PrintTicketData {
     companyName: string;
-    employeeName: string;
-    employeeId: string;
+    customerName: string;
+    customerId: string;
     mealName: string;
     timestamp: Date;
     orderId: string;
@@ -40,24 +40,23 @@ export const printTicket = async (data: PrintTicketData): Promise<boolean> => {
         printer.println(data.companyName || 'Canteen System');
         printer.setTextSize(1, 1);   // Reset to normal
         printer.bold(false);
-        printer.println('------------------------------');
+        printer.println('----------------------------');
 
         // Body
         printer.alignLeft();
-        printer.println(`Employee: ${data.employeeName}`);
-        printer.println(`ID:       ${data.employeeId}`);
-        printer.println(`Meal:     ${data.mealName}`);
-        printer.println(`Time:     ${data.timestamp.toLocaleString()}`);
-        printer.println(`Ticket ID: ${data.orderId}`);
+        printer.println(`Cust: ${data.customerName}`);
+        printer.println(`ID:   ${data.customerId}`);
+        printer.println(`Meal: ${data.mealName}`);
+        printer.println(`Time: ${data.timestamp.toLocaleString()}`);
+        printer.println(`TID: ${data.orderId}`);
         if (data.operatorName) {
-            printer.println(`Operator: ${data.operatorName}`);
+            printer.println(`Op: ${data.operatorName}`);
         }
 
-        printer.println('------------------------------');
+        printer.println('----------------------------');
         printer.alignCenter();
         printer.println('Thank you!');
-        printer.newLine();
-        printer.newLine();
+        // Removed extra newLines for shorter ticket
 
         printer.cut();
         printer.beep();

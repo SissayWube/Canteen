@@ -2,7 +2,7 @@ import api from './api';
 
 export interface Order {
     _id: string;
-    employee: { name: string; department: string };
+    customer: { name: string; department: string };
     foodItem?: { name: string }; // Optional because foodItem might be null if deleted or code not found, though rare
     price: number;
     subsidy: number;
@@ -29,7 +29,7 @@ export const ordersApi = {
         return data.orders;
     },
 
-    issueManual: async (data: { employeeId: string; foodItemCode: string }) => {
+    issueManual: async (data: { customerId: string; foodItemCode: string }) => {
         const response = await api.post<{ message: string }>('/orders/manual', data);
         return response.data;
     },
