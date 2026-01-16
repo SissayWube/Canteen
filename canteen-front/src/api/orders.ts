@@ -2,7 +2,7 @@ import api from './api';
 
 export interface Order {
     _id: string;
-    customer: { name: string; department: string; deviceId?: string };
+    customer: { _id: string; name: string; department: string; deviceId?: string };
     foodItem?: { name: string; currency?: string; price?: number; subsidy?: number };
     price: number;
     subsidy: number;
@@ -56,6 +56,17 @@ export const ordersApi = {
 
     reject: async (orderId: string, reason?: string) => {
         const response = await api.post<{ success: boolean }>(`/orders/${orderId}/reject`, { reason });
+        return response.data;
+    },
+
+    update: async (orderId: string, data: Partial<{
+        customerId: string;
+        foodItemCode: string | number;
+        isGuest: boolean;
+        guestName: string;
+        notes: string;
+    }>) => {
+        const response = await api.put<{ success: boolean; order: Order }>(`/orders/${orderId}`, data);
         return response.data;
     }
 };

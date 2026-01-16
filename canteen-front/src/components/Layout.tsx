@@ -6,7 +6,7 @@ import Navbar from './Navbar';
 import { Outlet } from 'react-router-dom';
 
 const DRAWER_WIDTH = 260;
-const COLLAPSED_WIDTH = 80;
+const COLLAPSED_WIDTH = 0;
 
 const Layout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);

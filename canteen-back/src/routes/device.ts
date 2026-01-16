@@ -35,7 +35,7 @@ router.post('/', async (req: Request, res: Response) => {
 
         const mealsToday = await Order.countDocuments({
             customer: customer._id,
-            status: 'approved',
+            status: { $ne: 'rejected' }, // Count pending + approved to prevent queueing
             timestamp: { $gte: today },
         });
 
@@ -51,6 +51,16 @@ router.post('/', async (req: Request, res: Response) => {
         const foodItem = await FoodItem.findOne({ code: String(workCode), isActive: true });
         if (!foodItem) {
             return res.status(404).json({ error: 'Invalid or inactive meal code' });
+        }
+
+        // Check available days
+        if (foodItem.availableDays && foodItem.availableDays.length > 0) {
+            const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+            if (!foodItem.availableDays.includes(today)) {
+                return res.status(403).json({
+                    error: `This meal is only available on: ${foodItem.availableDays.join(', ')}. Today is ${today}.`
+                });
+            }
         }
 
         // 3. Create order record

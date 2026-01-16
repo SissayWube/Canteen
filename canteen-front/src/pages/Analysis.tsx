@@ -1,40 +1,24 @@
 // src/pages/Analysis.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { Box, Typography, TextField, Button, Grid, CircularProgress, MenuItem, Paper, Autocomplete, Dialog, DialogTitle, DialogContent, DialogActions, Divider, Chip } from '@mui/material';
-import { DataGrid, GridToolbar, GridFooter, GridColDef } from '@mui/x-data-grid';
+import { Box, Typography, TextField, Button, Grid, MenuItem, Paper, Autocomplete, Dialog, DialogTitle, DialogContent, DialogActions, Divider, Chip, ButtonGroup, Skeleton } from '@mui/material';
+import { DataGrid, GridToolbar, GridFooter, GridColDef, GridRowSelectionModel } from '@mui/x-data-grid';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { Print as PrintIcon, PictureAsPdf, TableView, Comment as CommentIcon } from '@mui/icons-material';
+import { Print as PrintIcon, PictureAsPdf, TableView, Comment as CommentIcon, CalendarToday, EventNote, DateRange } from '@mui/icons-material';
 import logo from '../assets/phibelalogo.png';
 import Tooltip from '@mui/material/Tooltip';
 import dayjs, { Dayjs } from 'dayjs';
-import api from '../api/api';
 import { customersApi, Customer } from '../api/customers';
 import { foodItemsApi, FoodItem } from '../api/foodItems';
-import { debounce } from 'lodash';
+import { analysisApi, AnalysisOrderRow, AnalysisFilters } from '../api/analysis';
 import { Alert } from '@mui/material';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
+import { useQuery } from '@tanstack/react-query';
 
-interface OrderRow {
-    _id: string;
-    timestamp: string;
-    customer: {
-        name: string;
-        department: string;
-    };
-    foodItem: {
-        name: string;
-    };
-    operator?: {
-        username: string;
-    };
-    price: number;
-    subsidy: number;
-    status: string;
-    notes?: string;
-}
+// Using AnalysisOrderRow from api/analysis.ts
+type OrderRow = AnalysisOrderRow;
 
 
 function CustomFooter(props: any) {
@@ -61,16 +45,34 @@ const Analysis: React.FC = () => {
     const [to, setTo] = useState<Dayjs | null>(null);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [selectedDepartment, setSelectedDepartment] = useState('');
-    const [data, setData] = useState<OrderRow[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [departments, setDepartments] = useState<string[]>([]);
     const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
     const [selectedFoodItem, setSelectedFoodItem] = useState<FoodItem | null>(null);
     const [selectedStatus, setSelectedStatus] = useState<string>('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [selectedOrderDetails, setSelectedOrderDetails] = useState<OrderRow | null>(null);
+    // State for row selection (MUI v8+ uses { type, ids })
+    const [selectedRows, setSelectedRows] = useState<any>({ type: 'include', ids: new Set() });
+
+    // Build filters for React Query
+    const filters: AnalysisFilters = useMemo(() => {
+        const f: AnalysisFilters = {};
+        if (from) f.from = from.format('YYYY-MM-DD');
+        if (to) f.to = to.format('YYYY-MM-DD');
+        if (selectedCustomer) f.customerId = selectedCustomer._id;
+        if (selectedDepartment) f.department = selectedDepartment;
+        if (selectedFoodItem) f.itemCode = selectedFoodItem.code;
+        if (selectedStatus) f.status = selectedStatus;
+        return f;
+    }, [from, to, selectedCustomer, selectedDepartment, selectedFoodItem, selectedStatus]);
+
+    // Fetch analysis data with React Query
+    const { data = [], isLoading, isError } = useQuery({
+        queryKey: ['analysis', filters],
+        queryFn: () => analysisApi.getOrders(filters),
+        enabled: !!(from && to), // Only fetch when date range is set
+    });
 
     const totalMeals = data.length;
     const totalAmount = data.reduce((acc, curr) => acc + (curr.price || 0), 0);
@@ -91,56 +93,61 @@ const Analysis: React.FC = () => {
                 const uniqueDeps = Array.from(new Set(custs.map(c => c.department))).sort();
                 setDepartments(uniqueDeps);
             } catch (error) {
-                console.error('Failed to load filter data', error);
-                setError('Failed to load initial data. Please reload.');
+                console.error('Failed to load initial data', error);
             }
         };
         loadInitialData();
     }, []);
 
-    const fetchAnalysis = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const params = new URLSearchParams({ type: 'orders' });
-            if (from) params.append('from', from.format('YYYY-MM-DD'));
-            if (to) params.append('to', to.format('YYYY-MM-DD'));
-            if (selectedCustomer) params.append('customerId', selectedCustomer._id);
-            if (selectedDepartment) params.append('department', selectedDepartment);
-            if (selectedFoodItem) params.append('itemCode', selectedFoodItem.code); // Backend expects itemCode or we can change backend to use ID. Backend analysis.ts seems to check `itemCode` against `workCode` string.
-            // Let's check backend analysis.ts again. It says: if (itemCode) match.workCode = itemCode as string;
-            // The Order model has `workCode`. So passing code is correct.
-            if (selectedStatus) params.append('status', selectedStatus);
-
-            const { data } = await api.get(`/analysis?${params.toString()}`);
-            setData(data);
-        } catch (err: any) {
-            console.error('Failed to fetch analysis', err);
-            setError(err.response?.data?.error || 'Failed to fetch analysis data');
-        } finally {
-            setLoading(false);
+    // Quick date range functions
+    const setQuickRange = (range: 'today' | 'yesterday' | 'last7days' | 'thisMonth' | 'lastMonth') => {
+        switch (range) {
+            case 'today':
+                setFrom(dayjs());
+                setTo(dayjs());
+                break;
+            case 'yesterday':
+                setFrom(dayjs().subtract(1, 'day'));
+                setTo(dayjs().subtract(1, 'day'));
+                break;
+            case 'last7days':
+                setFrom(dayjs().subtract(6, 'days'));
+                setTo(dayjs());
+                break;
+            case 'thisMonth':
+                setFrom(dayjs().startOf('month'));
+                setTo(dayjs().endOf('month'));
+                break;
+            case 'lastMonth':
+                setFrom(dayjs().subtract(1, 'month').startOf('month'));
+                setTo(dayjs().subtract(1, 'month').endOf('month'));
+                break;
         }
     };
 
-    // Debounced fetch to avoid rapid calls
-    const debouncedFetch = useMemo(
-        () => debounce(() => {
-            fetchAnalysis();
-        }, 800),
-        [from, to, selectedCustomer, selectedDepartment, selectedFoodItem, selectedStatus]
-    );
-
-    // Effect to trigger fetch on filter changes
+    // Keyboard shortcuts
     useEffect(() => {
-        debouncedFetch();
-        // Cleanup to cancel pending debounce on unmount or re-run
-        return () => {
-            debouncedFetch.cancel();
+        const handleKeyPress = (e: KeyboardEvent) => {
+            if (e.ctrlKey || e.metaKey) {
+                switch (e.key.toLowerCase()) {
+                    case 'p':
+                        e.preventDefault();
+                        window.print();
+                        break;
+                    case 'e':
+                        e.preventDefault();
+                        if (data.length > 0) handleExportExcel();
+                        break;
+                }
+            }
         };
-    }, [from, to, selectedCustomer, selectedDepartment, selectedFoodItem, selectedStatus, debouncedFetch]);
+        window.addEventListener('keydown', handleKeyPress);
+        return () => window.removeEventListener('keydown', handleKeyPress);
+    }, [data]);
 
 
-    const handleExportPDF = () => {
+    const handleExportPDF = (selectedData?: OrderRow[]) => {
+        const exportData = selectedData || data;
         try {
             console.log("Starting PDF Export...");
             const doc = new jsPDF();
@@ -220,7 +227,7 @@ const Analysis: React.FC = () => {
             }
 
             // --- Data Table ---
-            const tableData = data.map((row) => [
+            const tableData = exportData.map((row) => [
                 dayjs(row.timestamp).format('DD/MM/YYYY HH:mm'),
                 row.customer?.name || 'Unknown',
                 row.customer?.department || 'Unknown',
@@ -240,9 +247,9 @@ const Analysis: React.FC = () => {
 
             // --- Summary ---
             const finalY = (doc as any).lastAutoTable?.finalY || 60;
-            const summaryTotalMeals = data.length;
-            const summaryTotalAmount = data.reduce((acc, curr) => acc + (curr.price || 0), 0);
-            const summaryTotalSubsidy = data.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
+            const summaryTotalMeals = exportData.length;
+            const summaryTotalAmount = exportData.reduce((acc, curr) => acc + (curr.price || 0), 0);
+            const summaryTotalSubsidy = exportData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
 
             doc.text(`Total Meals: ${summaryTotalMeals}`, 14, finalY + 10);
             doc.text(`Total Amount: ${summaryTotalAmount.toLocaleString()} ETB`, 14, finalY + 16);
@@ -272,7 +279,8 @@ const Analysis: React.FC = () => {
 
     // handleExportCSV removed as it was unused and causing lint warnings
 
-    const handleExportExcel = () => {
+    const handleExportExcel = (selectedData?: OrderRow[]) => {
+        const exportData = selectedData || data;
         try {
             console.log("Starting Excel (.xlsx) Export...");
 
@@ -288,7 +296,7 @@ const Analysis: React.FC = () => {
             ws_data.push(['Date', 'Customer', 'Department', 'Item', 'Operator', 'Price', 'Subsidy']);
 
             // Data Rows
-            data.forEach(row => {
+            exportData.forEach(row => {
                 ws_data.push([
                     dayjs(row.timestamp).format('DD/MM/YYYY HH:mm'),
                     row.customer?.name || 'Unknown',
@@ -301,9 +309,9 @@ const Analysis: React.FC = () => {
             });
 
             // Summary
-            const totalMealsCalc = data.length;
-            const totalAmountCalc = data.reduce((acc, curr) => acc + (curr.price || 0), 0);
-            const totalSubsidyCalc = data.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
+            const totalMealsCalc = exportData.length;
+            const totalAmountCalc = exportData.reduce((acc, curr) => acc + (curr.price || 0), 0);
+            const totalSubsidyCalc = exportData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
 
             ws_data.push([]);
             ws_data.push(['SUMMARY']);
@@ -521,7 +529,7 @@ const Analysis: React.FC = () => {
                     <Button
                         variant="outlined"
                         startIcon={<PictureAsPdf />}
-                        onClick={handleExportPDF}
+                        onClick={() => handleExportPDF()}
                         disabled={data.length === 0}
                     >
                         Export PDF
@@ -529,11 +537,31 @@ const Analysis: React.FC = () => {
                     <Button
                         variant="outlined"
                         startIcon={<TableView />}
-                        onClick={handleExportExcel}
+                        onClick={() => handleExportExcel()}
                         disabled={data.length === 0}
                     >
                         Export Excel
                     </Button>
+                    {(selectedRows.ids?.size > 0 || selectedRows.type === 'exclude') && (
+                        <Tooltip title="Export only selected rows">
+                            <Button
+                                variant="contained"
+                                color="secondary"
+                                startIcon={<TableView />}
+                                onClick={() => {
+                                    const selectedIds = selectedRows.ids || new Set();
+                                    const isExclude = selectedRows.type === 'exclude';
+                                    const selectedData = data.filter(row => {
+                                        const hasId = selectedIds.has(row._id);
+                                        return isExclude ? !hasId : hasId;
+                                    });
+                                    handleExportExcel(selectedData);
+                                }}
+                            >
+                                Export Selected ({selectedRows.type === 'exclude' ? (data.length - (selectedRows.ids?.size || 0)) : (selectedRows.ids?.size || 0)})
+                            </Button>
+                        </Tooltip>
+                    )}
                     <Button
                         variant="contained"
                         startIcon={<PrintIcon />}
@@ -544,7 +572,22 @@ const Analysis: React.FC = () => {
                 </Box>
             </Box>
 
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            {isError && <Alert severity="error" sx={{ mb: 2 }}>Failed to load analysis data. Please adjust your filters.</Alert>}
+            {!from || !to ? (
+                <Alert severity="info" sx={{ mb: 2 }}>Please select a date range to view analysis data</Alert>
+            ) : null}
+
+            {/* Quick Date Range Buttons */}
+            <Box className="no-print" sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={{ mb: 1, display: 'block', fontWeight: 'bold' }}>Quick Ranges:</Typography>
+                <ButtonGroup variant="outlined" size="small">
+                    <Button startIcon={<CalendarToday />} onClick={() => setQuickRange('today')}>Today</Button>
+                    <Button onClick={() => setQuickRange('yesterday')}>Yesterday</Button>
+                    <Button startIcon={<EventNote />} onClick={() => setQuickRange('last7days')}>Last 7 Days</Button>
+                    <Button startIcon={<DateRange />} onClick={() => setQuickRange('thisMonth')}>This Month</Button>
+                    <Button onClick={() => setQuickRange('lastMonth')}>Last Month</Button>
+                </ButtonGroup>
+            </Box>
 
             <Grid container spacing={2} sx={{ mb: 3 }} className="no-print">
                 <Grid size={{ xs: 12, sm: 3 }}>
@@ -552,6 +595,7 @@ const Analysis: React.FC = () => {
                         label="From"
                         value={from}
                         onChange={(newValue) => setFrom(newValue)}
+                        maxDate={to || undefined}
                         slotProps={{ textField: { fullWidth: true, size: 'small' } }}
                     />
                 </Grid>
@@ -560,6 +604,7 @@ const Analysis: React.FC = () => {
                         label="To"
                         value={to}
                         onChange={(newValue) => setTo(newValue)}
+                        minDate={from || undefined}
                         slotProps={{ textField: { fullWidth: true, size: 'small' } }}
                     />
                 </Grid>
@@ -607,38 +652,36 @@ const Analysis: React.FC = () => {
                         fullWidth
                         size="small"
                     >
-                        <MenuItem value="">All Departments</MenuItem>
+                        <MenuItem value="All Departments">All Departments</MenuItem>
                         {departments.map(dep => (
                             <MenuItem key={dep} value={dep}>{dep}</MenuItem>
                         ))}
                     </TextField>
+
                 </Grid>
-                <Grid size={12} sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-                    <Button
-                        variant="outlined"
-                        onClick={() => {
-                            setFrom(null);
-                            setTo(null);
-                            setSelectedCustomer(null);
-                            setSelectedDepartment('');
-                            setSelectedFoodItem(null);
-                            setSelectedStatus('');
-                            // Trigger a refresh after clearing
-                            setTimeout(() => fetchAnalysis(), 100);
-                        }}
-                        size="small"
-                    >
-                        Clear Filters
-                    </Button>
-                    <Button variant="contained" onClick={fetchAnalysis} disabled={loading} sx={{ px: 4 }} size="small">
-                        Apply Filters
-                    </Button>
-                </Grid>
+                <Button
+                    variant="outlined"
+                    onClick={() => {
+                        setFrom(null);
+                        setTo(null);
+                        setSelectedCustomer(null);
+                        setSelectedDepartment('');
+                        setSelectedFoodItem(null);
+                        setSelectedStatus('');
+                        setSelectedRows({ type: 'include', ids: new Set() });
+                    }}
+                    size="small"
+                    sx={{ ml: 2 }}
+                >
+                    Clear Filters
+                </Button>
+
             </Grid>
 
-            {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
-                    <CircularProgress />
+            {isLoading ? (
+                <Box sx={{ p: 5 }}>
+                    <Skeleton variant="rectangular" height={60} sx={{ mb: 2 }} />
+                    <Skeleton variant="rectangular" height={400} />
                 </Box>
             ) : (
                 <Paper className="print-content" sx={{ height: 600, width: '100%', '@media print': { height: 'auto', boxShadow: 'none' } }}>
@@ -653,6 +696,11 @@ const Analysis: React.FC = () => {
                             setSelectedOrderDetails(params.row);
                             setDetailsOpen(true);
                         }}
+                        checkboxSelection
+                        onRowSelectionModelChange={(newSelection) => {
+                            setSelectedRows(newSelection);
+                        }}
+                        rowSelectionModel={selectedRows}
                         disableRowSelectionOnClick
                         slots={{
                             toolbar: GridToolbar,

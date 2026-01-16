@@ -4,6 +4,8 @@ import cors from 'cors';
 import getSessionMiddleware from './config/session';
 import connectDB from './config/db';
 import mongoose from 'mongoose';
+import logger from './config/logger';
+import { errorHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth';
 import foodItemRoutes from './routes/foodItems';
 import userRoutes from './routes/users';
@@ -24,16 +26,19 @@ const PORT = process.env.PORT || 5000;
 const httpServer = new HttpServer(app);
 export const io = new SocketIOServer(httpServer, {
     cors: {
-        origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+        origin: [
+            process.env.FRONTEND_URL || 'http://localhost:5173',
+            'http://localhost:5174'  // Additional dev port
+        ],
         credentials: true,
     },
 });
 
 
 io.on('connection', (socket) => {
-    console.log('Operator connected:', socket.id);
+    logger.info('Operator connected', { socketId: socket.id });
     socket.on('disconnect', () => {
-        console.log('Operator disconnected:', socket.id);
+        logger.info('Operator disconnected', { socketId: socket.id });
     });
 })
 
@@ -44,11 +49,14 @@ connectDB();
 // Middleware
 app.use(express.json());
 app.use(cors({
-    origin: [process.env.FRONTEND_URL || 'http://localhost:5173', 'http://localhost:3000'],
+    origin: [
+        process.env.FRONTEND_URL || 'http://localhost:5173',
+        'http://localhost:3000',
+        'http://localhost:5174'  // Additional dev port
+    ],
     credentials: true,
 }));
 
-await mongoose.connect(process.env.MONGODB_URI!);
 app.use(getSessionMiddleware(mongoose));
 
 // Routes
@@ -65,7 +73,11 @@ app.use('/api/analysis', analysisRoutes);
 app.get('/health', (_req, res) => {
     res.status(200).json({ status: 'OK', db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' });
 });
+
+// Global error handler (must be last)
+app.use(errorHandler);
+
 // Start server
 httpServer.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    logger.info(`Server running on http://localhost:${PORT}`);
 });

@@ -5,8 +5,10 @@ import { customersApi, Customer } from '../api/customers';
 import { foodItemsApi, FoodItem } from '../api/foodItems';
 import { ordersApi } from '../api/orders';
 import { useAuth } from '../contexts/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 
 const ManualIssue: React.FC = () => {
+    const queryClient = useQueryClient();
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
@@ -69,6 +71,10 @@ const ManualIssue: React.FC = () => {
                 notes
             });
             setMessage({ type: 'success', text: data.message });
+
+            // Invalidate orders cache so Dashboard refreshes
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
+
             // Reset fields
             setSelectedCustomerId('');
             setSelectedFoodCode('');
@@ -140,6 +146,7 @@ const ManualIssue: React.FC = () => {
                                             onChange={(_, newValue) => {
                                                 setSelectedCustomerId(newValue ? newValue._id : '');
                                             }}
+                                            autoHighlight
                                             renderInput={(params) => (
                                                 <TextField
                                                     {...params}
@@ -148,6 +155,7 @@ const ManualIssue: React.FC = () => {
                                                     variant="outlined"
                                                     helperText={selectedDepartment ? `Showing customers in ${selectedDepartment}` : "Type to search by name"}
                                                     sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                                                    autoFocus
                                                 />
                                             )}
                                             renderOption={(props, option) => {
@@ -189,14 +197,23 @@ const ManualIssue: React.FC = () => {
                                         sx={{ borderRadius: '12px' }}
                                     >
                                         <MenuItem value=""><em>-- Select meal --</em></MenuItem>
-                                        {foodItems.map((item) => (
-                                            <MenuItem key={item._id} value={item.code}>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                                                    <Typography>{item.name}</Typography>
-                                                    <Typography variant="caption" sx={{ bgcolor: 'action.hover', px: 1, borderRadius: 1 }}>{item.currency} {item.price.toFixed(2)}</Typography>
-                                                </Box>
-                                            </MenuItem>
-                                        ))}
+                                        {foodItems.map((item) => {
+                                            const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+                                            const isAvailable = !item.availableDays || item.availableDays.length === 0 || item.availableDays.includes(today);
+
+                                            return (
+                                                <MenuItem key={item._id} value={item.code} disabled={!isAvailable}>
+                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                                                        <Typography color={!isAvailable ? 'text.disabled' : 'text.primary'}>
+                                                            {item.name} {!isAvailable && '(Not available today)'}
+                                                        </Typography>
+                                                        <Typography variant="caption" sx={{ bgcolor: !isAvailable ? 'action.disabledBackground' : 'action.hover', px: 1, borderRadius: 1 }}>
+                                                            {item.currency} {item.price.toFixed(2)}
+                                                        </Typography>
+                                                    </Box>
+                                                </MenuItem>
+                                            );
+                                        })}
                                     </Select>
                                 </FormControl>
                             </Grid>
