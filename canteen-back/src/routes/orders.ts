@@ -23,6 +23,7 @@ router.get('/', async (req: Request, res: Response) => {
             customerId,
             department,
             search,
+            status,
         } = req.query;
 
         const query: any = {};
@@ -94,6 +95,11 @@ router.get('/', async (req: Request, res: Response) => {
             query.customer = { $in: matchingCustomers.map(c => c._id) };
         }
 
+        // === Status Filter ===
+        if (status && typeof status === 'string' && ['pending', 'approved', 'rejected'].includes(status)) {
+            query.status = status;
+        }
+
         // Pagination
         const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
         const limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10) || 20));
@@ -132,26 +138,31 @@ router.get('/', async (req: Request, res: Response) => {
 
 
 // POST /api/orders/manual - Manual ticket issuance by operator
+interface ManualOrderBody {
+    customerId?: string;
+    foodItemCode: string | number;
+    isGuest?: boolean;
+    guestName?: string;
+    notes?: string;
+}
+
 router.post('/manual', requireAuth, async (req: Request, res: Response) => {
     try {
-        const { customerId, foodItemCode } = req.body;
+        const {
+            customerId,
+            foodItemCode,
+            isGuest = false,
+            guestName = '',
+            notes = '',
+        } = req.body as ManualOrderBody;
 
-        if (!customerId || !foodItemCode) {
-            return res.status(400).json({ error: 'customerId and foodItemCode are required' });
+        if (!foodItemCode) {
+            return res.status(400).json({ error: 'foodItemCode is required' });
         }
 
-        if (!mongoose.Types.ObjectId.isValid(customerId)) {
-            return res.status(400).json({ error: 'Invalid customerId' });
-        }
-
-        // Find customer
-        const customer = await Customer.findOne({
-            _id: customerId,
-            isActive: true,
-        });
-
-        if (!customer) {
-            return res.status(404).json({ error: 'Active customer not found' });
+        // Validate foodItemCode type (must be string or number)
+        if (typeof foodItemCode !== 'string' && typeof foodItemCode !== 'number') {
+            return res.status(400).json({ error: 'foodItemCode must be a string or number' });
         }
 
         // Find food item
@@ -164,50 +175,89 @@ router.post('/manual', requireAuth, async (req: Request, res: Response) => {
             return res.status(404).json({ error: 'Active food item not found' });
         }
 
+        // Check available days
+        if (foodItem.availableDays && foodItem.availableDays.length > 0) {
+            const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+            if (!foodItem.availableDays.includes(today)) {
+                return res.status(403).json({
+                    error: `This meal is only available on: ${foodItem.availableDays.join(', ')}. Today is ${today}.`,
+                    availableDays: foodItem.availableDays,
+                    today
+                });
+            }
+        }
+
         // Get global settings
         const settings = await Settings.findOne();
-
         if (!settings) {
             return res.status(500).json({ error: 'System settings not initialized' });
         }
 
-        // Check daily limit
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const mealsToday = await Order.countDocuments({
-            customer: customer._id,
-            timestamp: { $gte: today },
-        });
-
-        if (mealsToday >= settings.dailyMealLimit) {
-            return res.status(403).json({
-                error: 'Daily meal limit reached for this customer',
-                mealsToday,
-                limit: settings.dailyMealLimit,
-            });
-        }
-
-        // Create manual order
-        const order = await Order.create({
-            customer: customer._id,
+        const orderData: any = {
             foodItem: foodItem._id,
-            price: foodItem.price,
-            subsidy: foodItem.subsidy || 0,
-            currency: foodItem.currency || 'ETB',
             workCode: foodItem.code,
             timestamp: new Date(),
-            status: 'approved',
+            status: 'approved',  // Manual are auto-approved
             type: 'manual',
             ticketPrinted: false,
             operator: req.session.userId,
-        });
+            notes: notes.trim(),
+            price: foodItem.price,
+            subsidy: foodItem.subsidy || 0,
+        };
+
+        let ticketCustomerName = '';
+        let ticketCustomerId = '';
+
+        if (isGuest) {
+            orderData.isGuest = true;
+            orderData.guestName = guestName.trim() || 'Guest';
+            ticketCustomerName = orderData.guestName;
+            ticketCustomerId = orderData.guestName; // Use guest name as ID for ticket
+            // Optional: skip daily limit for guests, or add guest-specific limit
+        } else {
+            if (!customerId || !mongoose.Types.ObjectId.isValid(customerId)) {
+                return res.status(400).json({ error: 'Valid customerId required for non-guest' });
+            }
+
+            const customer = await Customer.findOne({
+                _id: customerId,
+                isActive: true,
+            });
+
+            if (!customer) {
+                return res.status(404).json({ error: 'Active customer not found' });
+            }
+
+            orderData.customer = customer._id;
+            ticketCustomerName = customer.name;
+            ticketCustomerId = customer.deviceId;
+
+            // Check daily limit (for employees only)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const mealsToday = await Order.countDocuments({
+                customer: customer._id,
+                timestamp: { $gte: today },
+            });
+
+            if (mealsToday >= settings.dailyMealLimit) {
+                return res.status(403).json({
+                    error: 'Daily meal limit reached for this customer',
+                    mealsToday,
+                    limit: settings.dailyMealLimit,
+                });
+            }
+        }
+
+        const order = await Order.create(orderData);
 
         // Print ticket
         const printSuccess = await printTicket({
             companyName: settings.companyName,
-            employeeName: customer.name,
-            employeeId: customer.deviceId,
+            customerName: ticketCustomerName,
+            customerId: ticketCustomerId,
             mealName: foodItem.name,
             timestamp: order.timestamp,
             orderId: order._id.toString().slice(-8),
@@ -217,9 +267,12 @@ router.post('/manual', requireAuth, async (req: Request, res: Response) => {
         order.ticketPrinted = printSuccess;
         await order.save();
 
-        // Notify dashboard of new order
+        // Notify dashboard (optional for manual, but good for live updates)
         if (io) {
-            io.emit('newPendingOrder', { orderId: order._id });
+            io.emit('orderApproved', {
+                orderId: order._id,
+                printed: printSuccess,
+            });
         }
 
         res.json({
@@ -227,11 +280,10 @@ router.post('/manual', requireAuth, async (req: Request, res: Response) => {
             printed: printSuccess,
             orderId: order._id,
             message: printSuccess
-                ? 'Manual ticket issued and printed successfully'
+                ? 'Ticket issued and printed successfully'
                 : 'Order recorded but printing failed',
-            customer: customer.name,
+            customer: ticketCustomerName,
             meal: foodItem.name,
-            mealsToday: mealsToday + 1,
         });
     } catch (error: any) {
         console.error('Manual order error:', error);
@@ -260,8 +312,8 @@ router.post('/:id/approve', requireAuth, async (req: Request, res: Response) => 
         const settings = await Settings.findOne() || { companyName: 'Company Canteen' };
         const printSuccess = await printTicket({
             companyName: settings.companyName,
-            employeeName: (order.customer as any).name,
-            employeeId: (order.customer as any).deviceId,
+            customerName: (order.customer as any).name,
+            customerId: (order.customer as any).deviceId,
             mealName: (order.foodItem as any).name,
             timestamp: order.timestamp,
             orderId: order._id.toString().slice(-8),
@@ -288,6 +340,7 @@ router.post('/:id/approve', requireAuth, async (req: Request, res: Response) => 
 // POST /api/orders/:id/reject
 router.post('/:id/reject', requireAuth, async (req: Request, res: Response) => {
     try {
+        const { reason } = req.body;
         const order = await Order.findById(req.params.id);
 
         if (!order) return res.status(404).json({ error: 'Order not found' });
@@ -298,6 +351,9 @@ router.post('/:id/reject', requireAuth, async (req: Request, res: Response) => {
         // Update status to rejected
         order.status = 'rejected';
         order.operator = new mongoose.Types.ObjectId(req.session.userId as string);
+        if (reason && typeof reason === 'string') {
+            order.notes = reason.trim();
+        }
         await order.save();
 
         // Notify all clients

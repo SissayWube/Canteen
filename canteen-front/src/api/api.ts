@@ -12,4 +12,16 @@ const api = axios.create({
 
 
 
+export const registerLogoutCallback = (callback: () => void) => {
+    api.interceptors.response.use(
+        (response) => response,
+        (error) => {
+            if (error.response && error.response.status === 401) {
+                callback();
+            }
+            return Promise.reject(error);
+        }
+    );
+};
+
 export default api;

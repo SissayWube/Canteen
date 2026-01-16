@@ -19,7 +19,8 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    IconButton
+    IconButton,
+    TablePagination
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -29,8 +30,13 @@ import {
     Print as PrintIcon,
     Close as CloseIcon,
     CheckCircle as ApproveIcon,
-    Cancel as RejectIcon
+    Cancel as RejectIcon,
+    FilterList as FilterIcon,
+    Comment as CommentIcon
 } from '@mui/icons-material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import Tooltip from '@mui/material/Tooltip';
+import dayjs, { Dayjs } from 'dayjs';
 
 const Dashboard: React.FC = () => {
     const { user } = useAuth();
@@ -41,14 +47,26 @@ const Dashboard: React.FC = () => {
     const [fetchTrigger, setFetchTrigger] = useState(0);
     const [confirmRejectOpen, setConfirmRejectOpen] = useState(false);
     const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null);
+    const [fromDate, setFromDate] = useState<Dayjs | null>(dayjs());
+    const [toDate, setToDate] = useState<Dayjs | null>(dayjs());
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [totalOrders, setTotalOrders] = useState(0);
 
     const refreshData = () => setFetchTrigger(prev => prev + 1);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const orders = await ordersApi.getAll();
-                setRecentOrders(orders.slice(0, 10)); // Show more since we have full width
+                const filters: any = {};
+                if (fromDate) filters.from = fromDate.format('YYYY-MM-DD');
+                if (toDate) filters.to = toDate.format('YYYY-MM-DD');
+                filters.page = page + 1;
+                filters.limit = rowsPerPage;
+
+                const response = await ordersApi.getAll(filters);
+                setRecentOrders(response.orders);
+                setTotalOrders(response.pagination.total);
             } catch (error) {
                 console.error("Failed to fetch dashboard data", error);
             }
@@ -79,7 +97,7 @@ const Dashboard: React.FC = () => {
         return () => {
             socket.disconnect();
         };
-    }, [fetchTrigger, selectedOrder?._id]);
+    }, [fetchTrigger, selectedOrder?._id, fromDate, toDate, page, rowsPerPage]);
 
     const handleApprove = async () => {
         if (!selectedOrder) return;
@@ -115,7 +133,7 @@ const Dashboard: React.FC = () => {
     };
 
     return (
-        <Box>
+        <Box sx={{ p: 2 }}>
             <style>
                 {`
                     @keyframes pulse-highlight {
@@ -141,11 +159,53 @@ const Dashboard: React.FC = () => {
                 </Button>
             </Box>
 
+            <Paper sx={{ p: 2, mb: 3 }}>
+                <Grid container spacing={2} alignItems="center">
+                    <Grid size={{ xs: 12, sm: 3 }}>
+                        <DatePicker
+                            label="From Date"
+                            value={fromDate}
+                            onChange={(newValue) => setFromDate(newValue)}
+                            slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 3 }}>
+                        <DatePicker
+                            label="To Date"
+                            value={toDate}
+                            onChange={(newValue) => setToDate(newValue)}
+                            slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }} sx={{ display: 'flex', gap: 2 }}>
+                        <Button
+                            variant="outlined"
+                            onClick={() => {
+                                setFromDate(dayjs());
+                                setToDate(dayjs());
+                            }}
+                            startIcon={<FilterIcon />}
+                        >
+                            Today
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            onClick={() => {
+                                setFromDate(null);
+                                setToDate(null);
+                            }}
+                        >
+                            Clear
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Paper>
+
             <Grid container spacing={3}>
                 <Grid size={{ xs: 12 }}>
                     <Paper sx={{ p: 0, borderRadius: 2, overflow: 'hidden' }}>
                         <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="h6">Recent Orders </Typography>
+                            <Typography variant="h6">Orders ({recentOrders.length})</Typography>
                         </Box>
                         <TableContainer sx={{ maxHeight: 'calc(100vh - 280px)' }}>
                             <Table stickyHeader size="small">
@@ -157,13 +217,13 @@ const Dashboard: React.FC = () => {
                                         <TableCell>Meal Code</TableCell>
                                         <TableCell align="right">Price</TableCell>
                                         <TableCell align="right">Subsidy</TableCell>
+                                        <TableCell align="center">Notes</TableCell>
                                         <TableCell>Time</TableCell>
                                         <TableCell align="center">Status</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
                                     {recentOrders
-                                        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                                         .map((tx) => (
                                             <TableRow
                                                 key={tx._id}
@@ -173,19 +233,31 @@ const Dashboard: React.FC = () => {
                                                 className={highlightOrderId === tx._id ? 'new-order-row' : ''}
                                             >
                                                 <TableCell>
-                                                    <Typography variant="subtitle2" fontWeight="bold">{tx.customer.name}</Typography>
+                                                    <Typography variant="subtitle2" fontWeight="bold">
+                                                        {tx.isGuest ? (tx.guestName || 'Guest') : (tx.customer?.name || 'Unknown')}
+                                                    </Typography>
                                                 </TableCell>
-                                                <TableCell>{tx.customer.department}</TableCell>
+                                                <TableCell>
+                                                    {tx.isGuest ? 'Visitor' : (tx.customer?.department || 'Unknown')}
+                                                </TableCell>
                                                 <TableCell>{tx.foodItem?.name || 'Unknown'}</TableCell>
                                                 <TableCell><Typography variant="body2" sx={{ fontFamily: 'monospace', bgcolor: 'action.hover', px: 1, borderRadius: 1, display: 'inline-block' }}>{tx.workCode}</Typography></TableCell>
                                                 <TableCell align="right">{tx.currency} {tx.price.toFixed(2)}</TableCell>
                                                 <TableCell align="right" sx={{ color: 'success.main', fontWeight: 'bold' }}>{tx.subsidy > 0 ? `-${tx.currency} ${tx.subsidy.toFixed(2)}` : '-'}</TableCell>
+                                                <TableCell align="center">
+                                                    {tx.notes && (
+                                                        <Tooltip title={tx.notes} arrow placement="top">
+                                                            <CommentIcon color="action" fontSize="small" />
+                                                        </Tooltip>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell>{new Date(tx.timestamp).toLocaleTimeString()}</TableCell>
                                                 <TableCell align="center">
                                                     <Chip
                                                         label={tx.status?.toUpperCase()}
                                                         color={tx.status === 'approved' ? 'success' : tx.status === 'pending' ? 'warning' : 'error'}
                                                         size="small"
+                                                        variant="outlined"
                                                         sx={{ fontWeight: 'bold', minWidth: 80 }}
                                                     />
                                                 </TableCell>
@@ -194,6 +266,18 @@ const Dashboard: React.FC = () => {
                                 </TableBody>
                             </Table>
                         </TableContainer>
+                        <TablePagination
+                            rowsPerPageOptions={[5, 10, 25]}
+                            component="div"
+                            count={totalOrders}
+                            rowsPerPage={rowsPerPage}
+                            page={page}
+                            onPageChange={(_, newPage) => setPage(newPage)}
+                            onRowsPerPageChange={(event) => {
+                                setRowsPerPage(parseInt(event.target.value, 10));
+                                setPage(0);
+                            }}
+                        />
                     </Paper>
                 </Grid>
             </Grid>
@@ -263,10 +347,22 @@ const Dashboard: React.FC = () => {
                                     </Box>
                                 </Grid>
 
+                                {selectedOrder.notes && (
+                                    <Grid size={{ xs: 12 }}>
+                                        <Divider sx={{ my: 1 }} />
+                                        <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 'bold' }}>Notes</Typography>
+                                        <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'background.default' }}>
+                                            <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                                                "{selectedOrder.notes}"
+                                            </Typography>
+                                        </Paper>
+                                    </Grid>
+                                )}
+
                                 <Grid size={{ xs: 12 }}>
-                                    <Typography variant="caption" color="text.secondary" display="block">
+                                    {/* <Typography variant="caption" color="text.secondary" display="block">
                                         Order System ID: {selectedOrder._id}
-                                    </Typography>
+                                    </Typography> */}
                                     <Typography variant="caption" color="text.secondary" display="block">
                                         Timestamp: {new Date(selectedOrder.timestamp).toLocaleString()}
                                     </Typography>

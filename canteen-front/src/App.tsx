@@ -13,6 +13,7 @@ import Analysis from './pages/Analysis';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import Users from './pages/Users';
+import NotFound from './pages/NotFound';
 
 const theme = createTheme({
   palette: {
@@ -41,6 +42,7 @@ function App() {
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/analysis" element={<Analysis />} />
                   <Route path="/users" element={<Users />} />
+                  <Route path="*" element={<NotFound />} />
                 </Route>
               </Route>
             </Routes>

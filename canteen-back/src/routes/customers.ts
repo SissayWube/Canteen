@@ -19,11 +19,56 @@ const requireAdmin = (req: Request, _res: Response, next: NextFunction) => {
 router.use(requireAuth);
 
 // Public (Authenticated) Routes - Accessible by Operators
-// GET all customers
-router.get('/', async (_req: Request, res: Response) => {
+// GET all customers with pagination and filtering
+router.get('/', async (req: Request, res: Response) => {
     try {
-        const customers = await Customer.find().sort({ name: 1 });
-        res.json(customers);
+        const {
+            page = '1',
+            limit = '20',
+            search,
+            department,
+            isActive,
+        } = req.query;
+
+        const query: any = {};
+
+        // Search by name
+        if (search && typeof search === 'string' && search.trim() !== '') {
+            query.name = { $regex: search.trim(), $options: 'i' };
+        }
+
+        // Filter by department
+        if (department && typeof department === 'string' && department.trim() !== '') {
+            query.department = { $regex: new RegExp(`^${department.trim()}$`, 'i') };
+        }
+
+        // Filter by active status
+        if (isActive !== undefined && typeof isActive === 'string') {
+            query.isActive = isActive === 'true';
+        }
+
+        // Pagination
+        const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+        const limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10) || 20));
+        const skip = (pageNum - 1) * limitNum;
+
+        // Execute query
+        const customers = await Customer.find(query)
+            .sort({ name: 1 })
+            .skip(skip)
+            .limit(limitNum);
+
+        const total = await Customer.countDocuments(query);
+
+        res.json({
+            customers,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                pages: Math.ceil(total / limitNum),
+            },
+        });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }
@@ -67,7 +112,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
 });
 
-// DELETE (or soft-deactivate)
+// DELETE (soft-deactivate)
 router.delete('/:id', async (req: Request, res: Response) => {
     try {
         const customer = await Customer.findByIdAndUpdate(
@@ -77,6 +122,17 @@ router.delete('/:id', async (req: Request, res: Response) => {
         );
         if (!customer) return res.status(404).json({ error: 'Customer not found' });
         res.json({ message: 'Customer deactivated' });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE hard - permanently delete customer
+router.delete('/hard/:id', async (req: Request, res: Response) => {
+    try {
+        const customer = await Customer.findByIdAndDelete(req.params.id);
+        if (!customer) return res.status(404).json({ error: 'Customer not found' });
+        res.json({ message: 'Customer permanently deleted', customer });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }

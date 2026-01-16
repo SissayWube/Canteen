@@ -9,9 +9,34 @@ export interface Customer {
     enrolledAt: string; // ISO date string
 }
 
+export interface CustomerFilters {
+    page?: number;
+    limit?: number;
+    search?: string;
+    department?: string;
+    isActive?: boolean;
+}
+
+export interface CustomerResponse {
+    customers: Customer[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        pages: number;
+    };
+}
+
 export const customersApi = {
-    getAll: async () => {
-        const { data } = await api.get<Customer[]>('/customers');
+    getAll: async (filters?: CustomerFilters) => {
+        const params = new URLSearchParams();
+        if (filters?.page) params.append('page', filters.page.toString());
+        if (filters?.limit) params.append('limit', filters.limit.toString());
+        if (filters?.search) params.append('search', filters.search);
+        if (filters?.department) params.append('department', filters.department);
+        if (filters?.isActive !== undefined) params.append('isActive', filters.isActive.toString());
+
+        const { data } = await api.get<CustomerResponse>(`/customers?${params.toString()}`);
         return data;
     },
 
@@ -27,6 +52,11 @@ export const customersApi = {
 
     toggleActive: async (id: string, isActive: boolean) => {
         const { data } = await api.put(`/customers/${id}`, { isActive });
+        return data;
+    },
+
+    delete: async (id: string) => {
+        const { data } = await api.delete(`/customers/hard/${id}`);
         return data;
     }
 };

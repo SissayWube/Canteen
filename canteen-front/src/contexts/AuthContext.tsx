@@ -2,6 +2,7 @@
 import { createContext, useState, useEffect, useContext } from 'react';
 import type { ReactNode } from 'react';
 import { authApi, User } from '../api/auth';
+import { registerLogoutCallback } from '../api/api';
 
 interface AuthContextType {
   user: User | null;
@@ -22,6 +23,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     checkAuth();
+    registerLogoutCallback(async () => {
+      await authApi.logout();
+      setUser(null);
+    });
   }, []);
 
   const checkAuth = async () => {

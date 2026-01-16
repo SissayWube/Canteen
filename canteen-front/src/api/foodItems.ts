@@ -12,9 +12,32 @@ export interface FoodItem {
     isActive: boolean;
 }
 
+export interface FoodItemFilters {
+    page?: number;
+    limit?: number;
+    search?: string;
+    isActive?: boolean;
+}
+
+export interface FoodItemResponse {
+    foodItems: FoodItem[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        pages: number;
+    };
+}
+
 export const foodItemsApi = {
-    getAll: async () => {
-        const { data } = await api.get<FoodItem[]>('/food-items');
+    getAll: async (filters?: FoodItemFilters) => {
+        const params = new URLSearchParams();
+        if (filters?.page) params.append('page', filters.page.toString());
+        if (filters?.limit) params.append('limit', filters.limit.toString());
+        if (filters?.search) params.append('search', filters.search);
+        if (filters?.isActive !== undefined) params.append('isActive', filters.isActive.toString());
+
+        const { data } = await api.get<FoodItemResponse>(`/food-items?${params.toString()}`);
         return data;
     },
 
@@ -30,6 +53,11 @@ export const foodItemsApi = {
 
     toggleActive: async (id: string, isActive: boolean) => {
         const { data } = await api.put(`/food-items/${id}`, { isActive });
+        return data;
+    },
+
+    delete: async (id: string) => {
+        const { data } = await api.delete(`/food-items/${id}`);
         return data;
     }
 };

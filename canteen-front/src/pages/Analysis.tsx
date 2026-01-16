@@ -1,13 +1,17 @@
 // src/pages/Analysis.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { Box, Typography, TextField, Button, Grid, CircularProgress, MenuItem, Paper, Autocomplete } from '@mui/material';
+import { Box, Typography, TextField, Button, Grid, CircularProgress, MenuItem, Paper, Autocomplete, Dialog, DialogTitle, DialogContent, DialogActions, Divider, Chip } from '@mui/material';
 import { DataGrid, GridToolbar, GridFooter, GridColDef } from '@mui/x-data-grid';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { Print as PrintIcon, PictureAsPdf, TableView } from '@mui/icons-material';
+import { Print as PrintIcon, PictureAsPdf, TableView, Comment as CommentIcon } from '@mui/icons-material';
 import logo from '../assets/phibelalogo.png';
+import Tooltip from '@mui/material/Tooltip';
 import dayjs, { Dayjs } from 'dayjs';
 import api from '../api/api';
 import { customersApi, Customer } from '../api/customers';
+import { foodItemsApi, FoodItem } from '../api/foodItems';
+import { debounce } from 'lodash';
+import { Alert } from '@mui/material';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { saveAs } from 'file-saver';
@@ -28,11 +32,13 @@ interface OrderRow {
     };
     price: number;
     subsidy: number;
+    status: string;
+    notes?: string;
 }
 
 
 function CustomFooter(props: any) {
-    const { totalMeals, totalAmount, totalSubsidy } = props;
+    const { totalMeals, totalAmount, totalSubsidy, ...other } = props;
     return (
         <Box>
             <Box sx={{ display: 'flex', borderTop: '1px solid #e0e0e0', p: 1, fontWeight: 'bold', bgcolor: '#f5f5f5' }}>
@@ -45,7 +51,7 @@ function CustomFooter(props: any) {
                 <Box sx={{ flex: 1, textAlign: 'right' }}>{(totalAmount || 0).toLocaleString()} ETB</Box>
                 <Box sx={{ flex: 1, textAlign: 'right' }}>{(totalSubsidy || 0).toLocaleString()} ETB</Box>
             </Box>
-            <GridFooter {...props} />
+            <GridFooter {...other} />
         </Box>
     );
 }
@@ -58,7 +64,13 @@ const Analysis: React.FC = () => {
     const [data, setData] = useState<OrderRow[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [departments, setDepartments] = useState<string[]>([]);
+    const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
+    const [selectedFoodItem, setSelectedFoodItem] = useState<FoodItem | null>(null);
+    const [selectedStatus, setSelectedStatus] = useState<string>('');
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    const [selectedOrderDetails, setSelectedOrderDetails] = useState<OrderRow | null>(null);
 
     const totalMeals = data.length;
     const totalAmount = data.reduce((acc, curr) => acc + (curr.price || 0), 0);
@@ -68,12 +80,19 @@ const Analysis: React.FC = () => {
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                const custs = await customersApi.getAll();
+                const [custResponse, itemsResponse] = await Promise.all([
+                    customersApi.getAll({ limit: 1000 }), // Get all for filters
+                    foodItemsApi.getAll({ limit: 1000 })  // Get all for filters
+                ]);
+                const custs = custResponse.customers;
+                const items = itemsResponse.foodItems;
                 setCustomers(custs);
+                setFoodItems(items.filter(i => i.isActive)); // Only active items
                 const uniqueDeps = Array.from(new Set(custs.map(c => c.department))).sort();
                 setDepartments(uniqueDeps);
             } catch (error) {
                 console.error('Failed to load filter data', error);
+                setError('Failed to load initial data. Please reload.');
             }
         };
         loadInitialData();
@@ -81,24 +100,44 @@ const Analysis: React.FC = () => {
 
     const fetchAnalysis = async () => {
         setLoading(true);
+        setError(null);
         try {
             const params = new URLSearchParams({ type: 'orders' });
             if (from) params.append('from', from.format('YYYY-MM-DD'));
             if (to) params.append('to', to.format('YYYY-MM-DD'));
             if (selectedCustomer) params.append('customerId', selectedCustomer._id);
             if (selectedDepartment) params.append('department', selectedDepartment);
+            if (selectedFoodItem) params.append('itemCode', selectedFoodItem.code); // Backend expects itemCode or we can change backend to use ID. Backend analysis.ts seems to check `itemCode` against `workCode` string.
+            // Let's check backend analysis.ts again. It says: if (itemCode) match.workCode = itemCode as string;
+            // The Order model has `workCode`. So passing code is correct.
+            if (selectedStatus) params.append('status', selectedStatus);
+
             const { data } = await api.get(`/analysis?${params.toString()}`);
             setData(data);
-        } catch (err) {
-            console.error('Failed to fetch analysis');
+        } catch (err: any) {
+            console.error('Failed to fetch analysis', err);
+            setError(err.response?.data?.error || 'Failed to fetch analysis data');
         } finally {
             setLoading(false);
         }
     };
 
+    // Debounced fetch to avoid rapid calls
+    const debouncedFetch = useMemo(
+        () => debounce(() => {
+            fetchAnalysis();
+        }, 800),
+        [from, to, selectedCustomer, selectedDepartment, selectedFoodItem, selectedStatus]
+    );
+
+    // Effect to trigger fetch on filter changes
     useEffect(() => {
-        fetchAnalysis();
-    }, []);
+        debouncedFetch();
+        // Cleanup to cancel pending debounce on unmount or re-run
+        return () => {
+            debouncedFetch.cancel();
+        };
+    }, [from, to, selectedCustomer, selectedDepartment, selectedFoodItem, selectedStatus, debouncedFetch]);
 
 
     const handleExportPDF = () => {
@@ -218,9 +257,13 @@ const Analysis: React.FC = () => {
             doc.text("PLEASE MAKE SURE THAT THIS IS THE CORRECT ISSUE BEFORE USE", pageWidth / 2, pageHeight - 10, { align: "center" });
 
             const pdfBlob = doc.output('blob');
-            const filename = `Orders_Analysis_${dayjs().format('YYYY-MM-DD')}.pdf`;
-            console.log("Saving PDF file:", filename);
-            saveAs(pdfBlob, filename);
+            // Dynamic filename with date range
+            let filename = `Orders_Analysis_${dayjs().format('YYYY-MM-DD')}`;
+            if (from && to) {
+                filename = `Orders_Analysis_${from.format('YYYY-MM-DD')}_to_${to.format('YYYY-MM-DD')}`;
+            }
+            console.log("Saving PDF file:", filename + '.pdf');
+            saveAs(pdfBlob, filename + '.pdf');
         } catch (error) {
             console.error("PDF Export Error:", error);
             alert("Failed to export PDF. See console.");
@@ -291,10 +334,13 @@ const Analysis: React.FC = () => {
             // Append worksheet to workbook
             XLSX.utils.book_append_sheet(wb, ws, 'Orders Analysis');
 
-            // Write to file
-            const filename = `Orders_Analysis_${dayjs().format('YYYY-MM-DD')}.xlsx`;
-            XLSX.writeFile(wb, filename);
-            console.log("Saved Excel file:", filename);
+            // Write to file - Dynamic filename with date range
+            let filename = `Orders_Analysis_${dayjs().format('YYYY-MM-DD')}`;
+            if (from && to) {
+                filename = `Orders_Analysis_${from.format('YYYY-MM-DD')}_to_${to.format('YYYY-MM-DD')}`;
+            }
+            XLSX.writeFile(wb, filename + '.xlsx');
+            console.log("Saved Excel file:", filename + '.xlsx');
         } catch (error) {
             console.error("Excel Export Error:", error);
             alert("Failed to export Excel. See console.");
@@ -349,10 +395,37 @@ const Analysis: React.FC = () => {
             align: 'right',
             headerAlign: 'right',
         },
+        {
+            field: 'notes',
+            headerName: 'Notes',
+            flex: 0.8,
+            align: 'center',
+            headerAlign: 'center',
+            renderCell: (params) => {
+                if (!params.row.notes) return null;
+                return (
+                    <Tooltip title={params.row.notes} arrow placement="left">
+                        <CommentIcon color="action" fontSize="small" />
+                    </Tooltip>
+                );
+            },
+        },
+        {
+            field: 'status',
+            headerName: 'Status',
+            flex: 1,
+            renderCell: (params) => {
+                const status = (params.row.status || 'approved').toLowerCase();
+                let color: 'success' | 'warning' | 'error' = 'success';
+                if (status === 'pending') color = 'warning';
+                else if (status === 'rejected') color = 'error';
+                return <Chip label={status.toUpperCase()} color={color} size="small" variant="outlined" />;
+            },
+        },
     ], []);
 
     return (
-        <Box sx={{ p: 3 }}>
+        <Box sx={{ p: 2 }}>
             <style>
                 {`
                     @media print {
@@ -471,13 +544,15 @@ const Analysis: React.FC = () => {
                 </Box>
             </Box>
 
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
             <Grid container spacing={2} sx={{ mb: 3 }} className="no-print">
                 <Grid size={{ xs: 12, sm: 3 }}>
                     <DatePicker
                         label="From"
                         value={from}
                         onChange={(newValue) => setFrom(newValue)}
-                        slotProps={{ textField: { fullWidth: true } }}
+                        slotProps={{ textField: { fullWidth: true, size: 'small' } }}
                     />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 3 }}>
@@ -485,7 +560,7 @@ const Analysis: React.FC = () => {
                         label="To"
                         value={to}
                         onChange={(newValue) => setTo(newValue)}
-                        slotProps={{ textField: { fullWidth: true } }}
+                        slotProps={{ textField: { fullWidth: true, size: 'small' } }}
                     />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 3 }}>
@@ -494,9 +569,34 @@ const Analysis: React.FC = () => {
                         getOptionLabel={(option) => option.name}
                         value={selectedCustomer}
                         onChange={(_, newValue) => setSelectedCustomer(newValue)}
-                        renderInput={(params) => <TextField {...params} label="Customer" fullWidth />}
+                        renderInput={(params) => <TextField {...params} label="Customer" fullWidth size="small" />}
                         fullWidth
                     />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 3 }}>
+                    <Autocomplete
+                        options={foodItems}
+                        getOptionLabel={(option) => `${option.name} (${option.code})`}
+                        value={selectedFoodItem}
+                        onChange={(_, newValue) => setSelectedFoodItem(newValue)}
+                        renderInput={(params) => <TextField {...params} label="Food Item" fullWidth size="small" />}
+                        fullWidth
+                    />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 3 }}>
+                    <TextField
+                        select
+                        label="Status"
+                        value={selectedStatus}
+                        onChange={(e) => setSelectedStatus(e.target.value)}
+                        fullWidth
+                        size="small"
+                    >
+                        <MenuItem value="">All Statuses</MenuItem>
+                        <MenuItem value="approved">Approved</MenuItem>
+                        <MenuItem value="pending">Pending</MenuItem>
+                        <MenuItem value="rejected">Rejected</MenuItem>
+                    </TextField>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 3 }}>
                     <TextField
@@ -505,6 +605,7 @@ const Analysis: React.FC = () => {
                         value={selectedDepartment}
                         onChange={(e) => setSelectedDepartment(e.target.value)}
                         fullWidth
+                        size="small"
                     >
                         <MenuItem value="">All Departments</MenuItem>
                         {departments.map(dep => (
@@ -520,11 +621,16 @@ const Analysis: React.FC = () => {
                             setTo(null);
                             setSelectedCustomer(null);
                             setSelectedDepartment('');
+                            setSelectedFoodItem(null);
+                            setSelectedStatus('');
+                            // Trigger a refresh after clearing
+                            setTimeout(() => fetchAnalysis(), 100);
                         }}
+                        size="small"
                     >
                         Clear Filters
                     </Button>
-                    <Button variant="contained" onClick={fetchAnalysis} disabled={loading} sx={{ px: 4 }}>
+                    <Button variant="contained" onClick={fetchAnalysis} disabled={loading} sx={{ px: 4 }} size="small">
                         Apply Filters
                     </Button>
                 </Grid>
@@ -543,6 +649,10 @@ const Analysis: React.FC = () => {
                         sx={{ '@media print': { height: 'auto', '& .MuiDataGrid-virtualScroller': { overflow: 'visible' } } }}
                         columns={analysisColumns}
                         getRowId={(row) => row._id}
+                        onRowClick={(params) => {
+                            setSelectedOrderDetails(params.row);
+                            setDetailsOpen(true);
+                        }}
                         disableRowSelectionOnClick
                         slots={{
                             toolbar: GridToolbar,
@@ -561,6 +671,101 @@ const Analysis: React.FC = () => {
                     />
                 </Paper>
             )}
+
+            <Dialog
+                open={detailsOpen}
+                onClose={() => setDetailsOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: { borderRadius: 3, overflow: 'hidden' }
+                }}
+            >
+                {selectedOrderDetails && (
+                    <>
+                        <DialogTitle sx={{ m: 0, p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'background.default' }}>
+                            <Typography variant="h6" fontWeight="bold">Order Details</Typography>
+                            <Button onClick={() => setDetailsOpen(false)} sx={{ minWidth: 'auto', p: 1 }}>
+                                X
+                            </Button>
+                        </DialogTitle>
+
+                        <DialogContent dividers sx={{ p: 4 }}>
+                            <Box sx={{ mb: 4 }}>
+                                <Alert
+                                    severity={selectedOrderDetails.status === 'approved' ? 'success' : selectedOrderDetails.status === 'pending' ? 'warning' : 'error'}
+                                    sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                                >
+                                    Current Status: {(selectedOrderDetails.status || 'APPROVED').toUpperCase()}
+                                </Alert>
+                            </Box>
+
+                            <Grid container spacing={4}>
+                                <Grid size={{ xs: 12, sm: 6 }}>
+                                    <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 'bold' }}>Customer Details</Typography>
+                                    <Typography variant="h6" sx={{ mt: 0.5 }}>{selectedOrderDetails.customer.name}</Typography>
+                                    <Typography variant="body2" color="text.secondary">{selectedOrderDetails.customer.department}</Typography>
+                                </Grid>
+
+                                <Grid size={{ xs: 12, sm: 6 }}>
+                                    <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 'bold' }}>Meal Information</Typography>
+                                    <Typography variant="h6" sx={{ mt: 0.5 }}>{selectedOrderDetails.foodItem?.name || 'N/A'}</Typography>
+                                    {/* <Typography variant="body2" color="text.secondary">Code: {selectedOrderDetails.workCode}</Typography> */}
+                                </Grid>
+
+                                <Grid size={{ xs: 12 }}>
+                                    <Divider sx={{ my: 1 }} />
+                                    <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 'bold' }}>Cost Breakdown</Typography>
+                                    <Box sx={{ mt: 1, p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                            <Typography variant="body2">Meal Price:</Typography>
+                                            <Typography variant="body2">ETB {selectedOrderDetails.price?.toFixed(2)}</Typography>
+                                        </Box>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <Typography variant="body2">Applied Subsidy:</Typography>
+                                            <Typography variant="body2" color="success.main">- ETB {selectedOrderDetails.subsidy?.toFixed(2)}</Typography>
+                                        </Box>
+                                        <Divider sx={{ my: 1.5 }} />
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <Typography variant="subtitle1" fontWeight="bold">Balance to Pay:</Typography>
+                                            <Typography variant="subtitle1" fontWeight="900" color="primary.main">
+                                                ETB {((selectedOrderDetails.price || 0) - (selectedOrderDetails.subsidy || 0)).toFixed(2)}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                </Grid>
+
+                                {selectedOrderDetails.notes && (
+                                    <Grid size={{ xs: 12 }}>
+                                        <Divider sx={{ my: 1 }} />
+                                        <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 'bold' }}>Notes</Typography>
+                                        <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'background.default' }}>
+                                            <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                                                "{selectedOrderDetails.notes}"
+                                            </Typography>
+                                        </Paper>
+                                    </Grid>
+                                )}
+
+                                <Grid size={{ xs: 12 }}>
+                                    {/* <Typography variant="caption" color="text.secondary" display="block">
+                                        Order ID: {selectedOrderDetails._id}
+                                    </Typography> */}
+                                    <Typography variant="caption" color="text.secondary" display="block">
+                                        Timestamp: {dayjs(selectedOrderDetails.timestamp).format('DD/MM/YYYY HH:mm:ss')}
+                                    </Typography>
+                                </Grid>
+                            </Grid>
+                        </DialogContent>
+
+                        <DialogActions sx={{ p: 3, bgcolor: 'background.default', gap: 1 }}>
+                            <Button variant="text" color="inherit" onClick={() => setDetailsOpen(false)} sx={{ borderRadius: 2 }}>
+                                Close
+                            </Button>
+                        </DialogActions>
+                    </>
+                )}
+            </Dialog>
         </Box >
     );
 };

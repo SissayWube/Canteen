@@ -11,11 +11,18 @@ export interface IOrder extends Document {
   status: 'pending' | 'approved' | 'rejected';
   type: 'manual' | 'automatic';
   ticketPrinted: boolean;
+  isGuest: boolean;
+  guestName: string;
+  notes: string;
   operator?: mongoose.Types.ObjectId;  // Ref to User (who issued/approved)
 }
 
 const orderSchema: Schema<IOrder> = new Schema({
-  customer: { type: Schema.Types.ObjectId, ref: 'Customer', required: true },
+  customer: {
+    type: Schema.Types.ObjectId,
+    ref: 'Customer',
+    required: function (this: IOrder) { return !this.isGuest; }
+  },
   foodItem: { type: Schema.Types.ObjectId, ref: 'FoodItem' },
   price: { type: Number, required: true },
   subsidy: { type: Number, default: 0 },
@@ -25,6 +32,9 @@ const orderSchema: Schema<IOrder> = new Schema({
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   type: { type: String, enum: ['manual', 'automatic'], default: 'manual' },
   ticketPrinted: { type: Boolean, default: false },
+  isGuest: { type: Boolean, default: false },
+  guestName: { type: String, default: '' },
+  notes: { type: String, default: '' },
   operator: { type: Schema.Types.ObjectId, ref: 'User' },
 });
 

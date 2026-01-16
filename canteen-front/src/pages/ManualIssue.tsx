@@ -1,6 +1,6 @@
 // src/pages/ManualIssue.tsx
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Select, MenuItem, Button, FormControl, InputLabel, Alert, Grid, Paper, Divider, Autocomplete, TextField, CircularProgress } from '@mui/material';
+import { Box, Typography, Select, MenuItem, Button, FormControl, InputLabel, Alert, Grid, Paper, Divider, Autocomplete, TextField, CircularProgress, Switch } from '@mui/material';
 import { customersApi, Customer } from '../api/customers';
 import { foodItemsApi, FoodItem } from '../api/foodItems';
 import { ordersApi } from '../api/orders';
@@ -14,6 +14,9 @@ const ManualIssue: React.FC = () => {
     const [selectedDepartment, setSelectedDepartment] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [isGuest, setIsGuest] = useState(false);
+    const [guestName, setGuestName] = useState('');
+    const [notes, setNotes] = useState('');
     const { user } = useAuth();
 
     // Derived data
@@ -29,29 +32,49 @@ const ManualIssue: React.FC = () => {
 
     useEffect(() => {
         Promise.all([
-            customersApi.getAll(),
-            foodItemsApi.getAll(),
-        ]).then(([custData, foodData]) => {
-            setCustomers(custData);
-            setFoodItems(foodData);
+            customersApi.getAll({ limit: 1000 }), // Get all for dropdowns
+            foodItemsApi.getAll({ limit: 1000 }), // Get all for dropdowns
+        ]).then(([custResponse, foodResponse]) => {
+            setCustomers(custResponse.customers);
+            setFoodItems(foodResponse.foodItems);
         });
     }, []);
 
     const handleSubmit = async () => {
-        if (!selectedCustomerId || !selectedFoodCode) {
-            setMessage({ type: 'error', text: 'Please select customer and meal' });
+        // Validation logic
+        if (!selectedFoodCode) {
+            setMessage({ type: 'error', text: 'Please select a meal' });
             return;
+        }
+
+        if (isGuest) {
+            if (!guestName.trim()) {
+                setMessage({ type: 'error', text: 'Please enter guest name' });
+                return;
+            }
+        } else {
+            if (!selectedCustomerId) {
+                setMessage({ type: 'error', text: 'Please select a customer' });
+                return;
+            }
         }
 
         setLoading(true);
         try {
             const data = await ordersApi.issueManual({
-                customerId: selectedCustomerId,
+                customerId: isGuest ? undefined : selectedCustomerId,
                 foodItemCode: selectedFoodCode,
+                isGuest,
+                guestName: isGuest ? guestName : undefined,
+                notes
             });
             setMessage({ type: 'success', text: data.message });
+            // Reset fields
             setSelectedCustomerId('');
             setSelectedFoodCode('');
+            setGuestName('');
+            setNotes('');
+            // Keep isGuest toggle as is, or reset? Let's keep it.
         } catch (err: any) {
             setMessage({ type: 'error', text: err.response?.data?.error || 'Print failed' });
         } finally {
@@ -60,11 +83,11 @@ const ManualIssue: React.FC = () => {
     };
 
     return (
-        <Box sx={{ p: 4, maxWidth: 1200, mx: 'auto' }}>
+        <Box sx={{ p: 1, maxWidth: 1200, mx: 'auto' }}>
             <Box sx={{ mb: 4 }}>
                 <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>Manual Order Issue</Typography>
                 <Typography variant="body1" color="text.secondary">
-                    Select a customer and meal to manually generate an order and print a ticket.
+                    Select a customer (or guest) and meal to manually generate an order and print a ticket.
                 </Typography>
             </Box>
 
@@ -72,7 +95,13 @@ const ManualIssue: React.FC = () => {
                 {/* Form Section */}
                 <Grid size={{ xs: 12, md: 6 }}>
                     <Paper sx={{ p: 4, borderRadius: 2, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-                        <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>Issue Details</Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 600 }}>Issue Details</Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" fontWeight="bold">Guest Order</Typography>
+                                <Switch checked={isGuest} onChange={(e) => setIsGuest(e.target.checked)} />
+                            </Box>
+                        </Box>
 
                         {message && (
                             <Alert severity={message.type} sx={{ mb: 3, borderRadius: '12px' }}>
@@ -81,59 +110,74 @@ const ManualIssue: React.FC = () => {
                         )}
 
                         <Grid container spacing={2}>
-                            <Grid size={{ xs: 12 }}>
-                                <FormControl fullWidth variant="outlined">
-                                    <InputLabel>Filter by Department</InputLabel>
-                                    <Select
-                                        value={selectedDepartment}
-                                        label="Filter by Department"
-                                        onChange={(e) => {
-                                            setSelectedDepartment(e.target.value);
-                                            setSelectedCustomerId('');
-                                        }}
-                                        sx={{ borderRadius: '12px' }}
-                                    >
-                                        <MenuItem value=""><em>All Departments</em></MenuItem>
-                                        {departments.map((dept) => (
-                                            <MenuItem key={dept} value={dept}>{dept}</MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-                            </Grid>
+                            {!isGuest ? (
+                                <>
+                                    <Grid size={{ xs: 12 }}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel>Filter by Department</InputLabel>
+                                            <Select
+                                                value={selectedDepartment}
+                                                label="Filter by Department"
+                                                onChange={(e) => {
+                                                    setSelectedDepartment(e.target.value);
+                                                    setSelectedCustomerId('');
+                                                }}
+                                                sx={{ borderRadius: '12px' }}
+                                            >
+                                                <MenuItem value=""><em>All Departments</em></MenuItem>
+                                                {departments.map((dept) => (
+                                                    <MenuItem key={dept} value={dept}>{dept}</MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Grid>
 
-                            <Grid size={{ xs: 12 }}>
-                                <Autocomplete
-                                    options={filteredCustomers}
-                                    getOptionLabel={(option) => `${option.name} (${option.deviceId})`}
-                                    value={customers.find(c => c._id === selectedCustomerId) || null}
-                                    onChange={(_, newValue) => {
-                                        setSelectedCustomerId(newValue ? newValue._id : '');
-                                    }}
-                                    renderInput={(params) => (
-                                        <TextField
-                                            {...params}
-                                            label="Search Customer"
-                                            placeholder="Type name or device ID..."
-                                            variant="outlined"
-                                            helperText={selectedDepartment ? `Showing customers in ${selectedDepartment}` : "Type to search by name"}
-                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                                    <Grid size={{ xs: 12 }}>
+                                        <Autocomplete
+                                            options={filteredCustomers}
+                                            getOptionLabel={(option) => `${option.name} (${option.deviceId})`}
+                                            value={customers.find(c => c._id === selectedCustomerId) || null}
+                                            onChange={(_, newValue) => {
+                                                setSelectedCustomerId(newValue ? newValue._id : '');
+                                            }}
+                                            renderInput={(params) => (
+                                                <TextField
+                                                    {...params}
+                                                    label="Search Customer"
+                                                    placeholder="Type name or device ID..."
+                                                    variant="outlined"
+                                                    helperText={selectedDepartment ? `Showing customers in ${selectedDepartment}` : "Type to search by name"}
+                                                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                                                />
+                                            )}
+                                            renderOption={(props, option) => {
+                                                const { key, ...otherProps } = props;
+                                                return (
+                                                    <li key={key} {...otherProps}>
+                                                        <Box>
+                                                            <Typography variant="body1" fontWeight="medium">{option.name}</Typography>
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {option.department} | ID: {option.deviceId}
+                                                            </Typography>
+                                                        </Box>
+                                                    </li>
+                                                )
+                                            }}
                                         />
-                                    )}
-                                    renderOption={(props, option) => {
-                                        const { key, ...otherProps } = props;
-                                        return (
-                                            <li key={key} {...otherProps}>
-                                                <Box>
-                                                    <Typography variant="body1" fontWeight="medium">{option.name}</Typography>
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        {option.department} | ID: {option.deviceId}
-                                                    </Typography>
-                                                </Box>
-                                            </li>
-                                        )
-                                    }}
-                                />
-                            </Grid>
+                                    </Grid>
+                                </>
+                            ) : (
+                                <Grid size={{ xs: 12 }}>
+                                    <TextField
+                                        label="Guest Name"
+                                        value={guestName}
+                                        onChange={(e) => setGuestName(e.target.value)}
+                                        fullWidth
+                                        required
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                                    />
+                                </Grid>
+                            )}
 
                             <Grid size={{ xs: 12 }}>
                                 <FormControl fullWidth>
@@ -156,13 +200,25 @@ const ManualIssue: React.FC = () => {
                                     </Select>
                                 </FormControl>
                             </Grid>
+
+                            <Grid size={{ xs: 12 }}>
+                                <TextField
+                                    label="Notes (Optional)"
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    fullWidth
+                                    multiline
+                                    rows={2}
+                                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                                />
+                            </Grid>
                         </Grid>
 
                         <Button
                             variant="contained"
                             color="primary"
                             onClick={handleSubmit}
-                            disabled={loading || !selectedCustomerId || !selectedFoodCode}
+                            disabled={loading || (!isGuest && !selectedCustomerId) || (isGuest && !guestName) || !selectedFoodCode}
                             fullWidth
                             size="large"
                             sx={{
@@ -182,8 +238,8 @@ const ManualIssue: React.FC = () => {
                 {/* Ticket Preview Section */}
                 <Grid size={{ xs: 12, md: 6 }}>
                     <Box sx={{ position: 'sticky', top: 100 }}>
-                        <Typography variant="overline" align="center" display="block" sx={{ mb: 2, color: 'text.secondary', fontWeight: 'bold', letterSpacing: 2 }}>
-                            LIVE TICKET PREVIEW
+                        <Typography variant="overline" align="center" display="block" sx={{ mb: 1, color: 'text.secondary', fontWeight: 'bold', letterSpacing: 2 }}>
+                            TICKET PREVIEW
                         </Typography>
                         <Paper
                             elevation={10}
@@ -223,7 +279,7 @@ const ManualIssue: React.FC = () => {
                             }}
                         >
                             <Box sx={{ textAlign: 'center', mb: 1 }}>
-                                <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: 1 }}>CANTEEN</Typography>
+                                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.9rem', letterSpacing: 0 }}>PHIBELA INDUSTRIAL PLC CANTEEN</Typography>
                                 <Typography variant="h6" sx={{ fontWeight: 500, fontSize: '0.9rem', mt: -0.5 }}>RECEIPT</Typography>
                                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>{currentDateTime}</Typography>
                             </Box>
@@ -233,15 +289,22 @@ const ManualIssue: React.FC = () => {
                             <Box sx={{ my: 1.5 }}>
                                 <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>CUSTOMER DETAILS</Typography>
                                 <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0, fontSize: '1.1rem' }}>
-                                    {selectedCustomer ? selectedCustomer.name.toUpperCase() : '----------------'}
+                                    {isGuest
+                                        ? (guestName ? guestName.toUpperCase() : 'GUEST NAME')
+                                        : (selectedCustomer ? selectedCustomer.name.toUpperCase() : '----------------')
+                                    }
                                 </Typography>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0 }}>
                                     <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>ID:</Typography>
-                                    <Typography variant="body2" sx={{ fontWeight: 'medium', fontSize: '0.8rem' }}>{selectedCustomer ? selectedCustomer.deviceId : '-------'}</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 'medium', fontSize: '0.8rem' }}>
+                                        {isGuest ? 'GUEST' : (selectedCustomer ? selectedCustomer.deviceId : '-------')}
+                                    </Typography>
                                 </Box>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>DEPT:</Typography>
-                                    <Typography variant="body2" sx={{ fontWeight: 'medium', fontSize: '0.8rem' }}>{selectedCustomer ? selectedCustomer.department : '----------------'}</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 'medium', fontSize: '0.8rem' }}>
+                                        {isGuest ? 'VISITOR' : (selectedCustomer ? selectedCustomer.department : '----------------')}
+                                    </Typography>
                                 </Box>
                             </Box>
 
@@ -269,14 +332,14 @@ const ManualIssue: React.FC = () => {
                                 </Box>
                             </Box>
 
-                            <Box sx={{ mt: 'auto', textAlign: 'center', pt: 1.5 }}>
+                            <Box sx={{ mt: 'auto', textAlign: 'center', pt: 1 }}>
                                 <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 'bold', fontSize: '0.7rem' }}>
                                     CODE: {selectedFood ? selectedFood.code : '---------'}<br />
                                     OPERATOR: {user?.username?.toUpperCase() || '---'}
                                 </Typography>
-                                <Typography variant="body2" sx={{ mt: 0.5, fontSize: '0.65rem', color: 'text.secondary' }}>
+                                {/* <Typography variant="body2" sx={{ mt: 0.5, fontSize: '0.65rem', color: 'text.secondary' }}>
                                     * PLEASE RETAIN THIS TICKET FOR MEAL COLLECTION *
-                                </Typography>
+                                </Typography> */}
                             </Box>
                         </Paper>
                     </Box>
