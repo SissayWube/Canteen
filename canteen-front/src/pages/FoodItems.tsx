@@ -28,6 +28,7 @@ import {
 } from '@mui/material';
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import { foodItemsApi, FoodItem, FoodItemFilters } from '../api/foodItems';
+import TableSkeleton from '../components/TableSkeleton';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 
 const FoodItems: React.FC = () => {
@@ -371,29 +372,33 @@ const FoodItems: React.FC = () => {
 
       {/* Data Grid */}
       <Box sx={{ height: 600, width: '100%' }}>
-        <DataGrid
-          density="compact"
-          rows={foodItems}
-          getRowId={(row) => row._id}
-          columns={columns}
-          loading={loading}
-          pagination
-          paginationMode="server"
-          rowCount={totalItems}
-          paginationModel={{ page, pageSize: rowsPerPage }}
-          onPaginationModelChange={(model) => {
-            setPage(model.page);
-            setRowsPerPage(model.pageSize);
-          }}
-          pageSizeOptions={[5, 10, 25, 50]}
-          disableRowSelectionOnClick
-          slots={{ toolbar: GridToolbar }}
-          slotProps={{
-            toolbar: {
-              showQuickFilter: false,
-            },
-          }}
-        />
+        {loading ? (
+          <TableSkeleton rows={10} />
+        ) : (
+          <DataGrid
+            density="compact"
+            rows={foodItems}
+            getRowId={(row) => row._id}
+            columns={columns}
+            loading={loading}
+            pagination
+            paginationMode="server"
+            rowCount={totalItems}
+            paginationModel={{ page, pageSize: rowsPerPage }}
+            onPaginationModelChange={(model) => {
+              setPage(model.page);
+              setRowsPerPage(model.pageSize);
+            }}
+            pageSizeOptions={[5, 10, 25, 50]}
+            disableRowSelectionOnClick
+            slots={{ toolbar: GridToolbar }}
+            slotProps={{
+              toolbar: {
+                showQuickFilter: false,
+              },
+            }}
+          />
+        )}
       </Box>
 
       {/* Add/Edit Dialog */}

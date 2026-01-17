@@ -1,7 +1,7 @@
 // src/pages/Analysis.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { Box, Typography, TextField, Button, Grid, MenuItem, Paper, Autocomplete, Dialog, DialogTitle, DialogContent, DialogActions, Divider, Chip, ButtonGroup, Skeleton } from '@mui/material';
-import { DataGrid, GridToolbar, GridFooter, GridColDef, GridRowSelectionModel } from '@mui/x-data-grid';
+import { Box, Typography, TextField, Button, Grid, MenuItem, Paper, Autocomplete, Dialog, DialogTitle, DialogContent, DialogActions, Divider, Chip, ButtonGroup } from '@mui/material';
+import { DataGrid, GridToolbar, GridFooter, GridColDef } from '@mui/x-data-grid';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { Print as PrintIcon, PictureAsPdf, TableView, Comment as CommentIcon, CalendarToday, EventNote, DateRange } from '@mui/icons-material';
 import logo from '../assets/phibelalogo.png';
@@ -16,6 +16,7 @@ import autoTable from 'jspdf-autotable';
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
 import { useQuery } from '@tanstack/react-query';
+import TableSkeleton from '../components/TableSkeleton';
 
 // Using AnalysisOrderRow from api/analysis.ts
 type OrderRow = AnalysisOrderRow;
@@ -679,10 +680,7 @@ const Analysis: React.FC = () => {
             </Grid>
 
             {isLoading ? (
-                <Box sx={{ p: 5 }}>
-                    <Skeleton variant="rectangular" height={60} sx={{ mb: 2 }} />
-                    <Skeleton variant="rectangular" height={400} />
-                </Box>
+                <TableSkeleton rows={10} />
             ) : (
                 <Paper className="print-content" sx={{ height: 600, width: '100%', '@media print': { height: 'auto', boxShadow: 'none' } }}>
                     <DataGrid

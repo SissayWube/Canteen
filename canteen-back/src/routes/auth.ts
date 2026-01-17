@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import User from '../models/User';
 import bcrypt from 'bcryptjs';
+import { AuditService } from '../services/AuditService';
 
 const router = express.Router();
 
@@ -14,6 +15,7 @@ router.post('/login', async (req: LoginRequest, res: Response) => {
         const { username, password } = req.body;
         const user = await User.findOne({ username });
         if (!user || !(await bcrypt.compare(password, user.password))) {
+            // Optional: Log failed login attempts? Maybe too noisy.
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
@@ -23,6 +25,9 @@ router.post('/login', async (req: LoginRequest, res: Response) => {
 
         req.session.save((err) => {
             if (err) return res.status(500).json({ error: 'Session save failed' });
+
+            AuditService.log('Login', {}, { req, userId: user._id.toString(), username: user.username }, 'User', user._id.toString());
+
             res.json({ message: 'Login successful', user: { username: user.username, role: user.role } });
         });
     } catch (err: any) {
@@ -54,6 +59,8 @@ router.post('/change-password', async (req: Request, res: Response) => {
         user.password = await bcrypt.hash(newPassword, 12);
         await user.save();
 
+        AuditService.log('Change Password', {}, { req }, 'User', user._id.toString());
+
         res.json({ message: 'Password updated successfully' });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -62,6 +69,9 @@ router.post('/change-password', async (req: Request, res: Response) => {
 
 // Logout
 router.post('/logout', (req: Request, res: Response) => {
+    if (req.session.userId) {
+        AuditService.log('Logout', {}, { req }, 'User', req.session.userId);
+    }
     req.session.destroy((err) => {
         if (err) return res.status(500).json({ error: 'Logout failed' });
         res.clearCookie('connect.sid');

@@ -25,6 +25,7 @@ import {
 } from '@mui/material';
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import { customersApi, Customer, CustomerFilters } from '../api/customers';
+import TableSkeleton from '../components/TableSkeleton';
 import { useAuth } from '../contexts/AuthContext';
 import { Delete as DeleteIcon, PersonAdd as PersonAddIcon } from '@mui/icons-material';
 
@@ -361,29 +362,33 @@ const Customers: React.FC = () => {
 
             {/* Data Grid */}
             <Box sx={{ height: 600, width: '100%' }}>
-                <DataGrid
-                    density="compact"
-                    rows={customers}
-                    getRowId={(row) => row._id}
-                    columns={columns}
-                    loading={loading}
-                    pagination
-                    paginationMode="server"
-                    rowCount={totalCustomers}
-                    paginationModel={{ page, pageSize: rowsPerPage }}
-                    onPaginationModelChange={(model) => {
-                        setPage(model.page);
-                        setRowsPerPage(model.pageSize);
-                    }}
-                    pageSizeOptions={[5, 10, 25, 50]}
-                    disableRowSelectionOnClick
-                    slots={{ toolbar: GridToolbar }}
-                    slotProps={{
-                        toolbar: {
-                            showQuickFilter: false,
-                        },
-                    }}
-                />
+                {loading ? (
+                    <TableSkeleton rows={10} />
+                ) : (
+                    <DataGrid
+                        density="compact"
+                        rows={customers}
+                        getRowId={(row) => row._id}
+                        columns={columns}
+                        loading={loading}
+                        pagination
+                        paginationMode="server"
+                        rowCount={totalCustomers}
+                        paginationModel={{ page, pageSize: rowsPerPage }}
+                        onPaginationModelChange={(model) => {
+                            setPage(model.page);
+                            setRowsPerPage(model.pageSize);
+                        }}
+                        pageSizeOptions={[5, 10, 25, 50]}
+                        disableRowSelectionOnClick
+                        slots={{ toolbar: GridToolbar }}
+                        slotProps={{
+                            toolbar: {
+                                showQuickFilter: false,
+                            },
+                        }}
+                    />
+                )}
             </Box>
 
             {/* Add/Edit Dialog */}

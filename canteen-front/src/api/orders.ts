@@ -23,6 +23,7 @@ export interface OrderFilters {
     status?: 'pending' | 'approved' | 'rejected';
     page?: number;
     limit?: number;
+    customerId?: string;
 }
 
 export const ordersApi = {
@@ -33,6 +34,7 @@ export const ordersApi = {
         if (filters?.status) params.append('status', filters.status);
         if (filters?.page) params.append('page', filters.page.toString());
         if (filters?.limit) params.append('limit', filters.limit.toString());
+        if (filters?.customerId) params.append('customerId', filters.customerId);
 
         const { data } = await api.get<{ orders: Order[], pagination: { page: number, limit: number, total: number, pages: number } }>(`/orders?${params.toString()}`);
         return data;

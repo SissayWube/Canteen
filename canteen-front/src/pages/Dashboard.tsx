@@ -44,6 +44,7 @@ import { customersApi, Customer } from '../api/customers';
 import { foodItemsApi, FoodItem } from '../api/foodItems';
 import { Autocomplete, TextField } from '@mui/material';
 import { Edit as EditIcon, Save as SaveIcon } from '@mui/icons-material';
+import TableSkeleton from '../components/TableSkeleton';
 
 const Dashboard: React.FC = () => {
     const { user } = useAuth();
@@ -123,10 +124,23 @@ const Dashboard: React.FC = () => {
         }
     };
 
+    const [filterCustomers, setFilterCustomers] = useState<Customer[]>([]);
+    const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+
+    // Fetch customers for filter on mount
+    React.useEffect(() => {
+        customersApi.getAll({ limit: 1000 }).then(res => {
+            setFilterCustomers(res.customers);
+        }).catch(err => console.error('Failed to load customers for filter', err));
+    }, []);
+
+
+
     // Build filters
     const filters: OrderFilters = {
         page: page + 1,
         limit: rowsPerPage,
+        customerId: selectedCustomerId || undefined
     };
     if (fromDate) filters.from = fromDate.format('YYYY-MM-DD');
     if (toDate) filters.to = toDate.format('YYYY-MM-DD');
@@ -227,12 +241,25 @@ const Dashboard: React.FC = () => {
                             slotProps={{ textField: { fullWidth: true, size: 'small' } }}
                         />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 6 }} sx={{ display: 'flex', gap: 2 }}>
+                    <Grid size={{ xs: 12, sm: 3 }}>
+                        <Autocomplete
+                            options={filterCustomers}
+                            getOptionLabel={(option) => `${option.name} (${option.deviceId})`}
+                            value={filterCustomers.find(c => c._id === selectedCustomerId) || null}
+                            onChange={(_, newValue) => {
+                                setSelectedCustomerId(newValue?._id || '');
+                                setPage(0);
+                            }}
+                            renderInput={(params) => <TextField {...params} label="Filter by Customer" size="small" />}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 3 }} sx={{ display: 'flex', gap: 2 }}>
                         <Button
                             variant="outlined"
                             onClick={() => {
                                 setFromDate(dayjs());
                                 setToDate(dayjs());
+                                setSelectedCustomerId('');
                             }}
                             startIcon={<FilterIcon />}
                         >
@@ -243,10 +270,11 @@ const Dashboard: React.FC = () => {
                             onClick={() => {
                                 setFromDate(null);
                                 setToDate(null);
+                                setSelectedCustomerId('');
                                 setPage(0);
                             }}
                         >
-                            Reset All
+                            Reset
                         </Button>
                     </Grid>
                 </Grid>
@@ -259,9 +287,7 @@ const Dashboard: React.FC = () => {
                             <Typography variant="h6">Orders ({orders.length})</Typography>
                         </Box>
                         {isLoading ? (
-                            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                                <CircularProgress />
-                            </Box>
+                            <TableSkeleton rows={10} />
                         ) : isError ? (
                             <Alert severity="error" sx={{ m: 2 }}>Failed to load orders</Alert>
                         ) : (

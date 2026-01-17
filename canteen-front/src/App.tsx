@@ -14,6 +14,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import Users from './pages/Users';
 import NotFound from './pages/NotFound';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const theme = createTheme({
   palette: {
@@ -35,14 +36,14 @@ function App() {
               {/* All protected routes use Layout (sidebar + content) */}
               <Route element={<ProtectedRoute />}>
                 <Route element={<Layout />}>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/manual-issue" element={<ManualIssue />} />
-                  <Route path="/customers" element={<Customers />} />
-                  <Route path="/food-items" element={<FoodItems />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                  <Route path="/analysis" element={<Analysis />} />
-                  <Route path="/users" element={<Users />} />
-                  <Route path="*" element={<NotFound />} />
+                  <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+                  <Route path="/manual-issue" element={<ErrorBoundary><ManualIssue /></ErrorBoundary>} />
+                  <Route path="/customers" element={<ErrorBoundary><Customers /></ErrorBoundary>} />
+                  <Route path="/food-items" element={<ErrorBoundary><FoodItems /></ErrorBoundary>} />
+                  <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
+                  <Route path="/analysis" element={<ErrorBoundary><Analysis /></ErrorBoundary>} />
+                  <Route path="/users" element={<ErrorBoundary><Users /></ErrorBoundary>} />
+                  <Route path="*" element={<ErrorBoundary><NotFound /></ErrorBoundary>} />
                 </Route>
               </Route>
             </Routes>

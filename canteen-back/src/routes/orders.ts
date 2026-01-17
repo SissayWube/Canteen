@@ -1,4 +1,3 @@
-// src/routes/orders.ts
 import express, { Request, Response, NextFunction } from 'express';
 import Order from '../models/Order';
 import Customer from '../models/Customer';
@@ -9,6 +8,7 @@ import { requireAuth } from '../middleware/auth';
 import { printTicket } from '../services/printerService';
 import { io } from '../server';
 import OrderService from '../services/OrderService.js';
+import { AuditService } from '../services/AuditService';
 
 const router = express.Router();
 
@@ -71,6 +71,8 @@ router.post('/manual', requireAuth, async (req: Request, res: Response, next: Ne
         order.ticketPrinted = printSuccess;
         await order.save();
 
+        AuditService.log('Manual Order', { orderId: order._id, customer: ticketData.customerName, meal: ticketData.mealName }, { req }, 'Order', order._id.toString());
+
         // Notify dashboard
         if (io) {
             io.emit('orderApproved', {
@@ -110,6 +112,8 @@ router.post('/:id/approve', requireAuth, async (req: Request, res: Response, nex
         order.ticketPrinted = printSuccess;
         await order.save();
 
+        AuditService.log('Approve Order', { orderId: order._id }, { req }, 'Order', order._id.toString());
+
         // Notify all clients
         if (io) {
             io.emit('orderApproved', {
@@ -134,6 +138,8 @@ router.post('/:id/reject', requireAuth, async (req: Request, res: Response, next
             req.session.userId!,
             reason
         );
+
+        AuditService.log('Reject Order', { orderId: req.params.id, reason }, { req }, 'Order', req.params.id);
 
         // Notify all clients
         if (io) {
