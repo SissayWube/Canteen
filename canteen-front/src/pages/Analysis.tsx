@@ -34,7 +34,7 @@ function CustomFooter(props: any) {
                 bgcolor: '#f5f5f5',
                 alignItems: 'center'
             }}>
-                <Box sx={{ width: 50 }} /> {/* Checkbox column offset */}
+                <Box className="no-print" sx={{ width: 50 }} /> {/* Checkbox column offset */}
                 <Box sx={{ flex: 1.5, pl: 2 }}>Totals</Box> {/* Date column */}
                 <Box sx={{ flex: 1.5 }} /> {/* Customer column */}
                 <Box sx={{ flex: 1.5 }} /> {/* Department column */}
@@ -42,8 +42,9 @@ function CustomFooter(props: any) {
                 <Box sx={{ flex: 1.2 }} /> {/* Operator column */}
                 <Box sx={{ flex: 1, textAlign: 'right', pr: 2 }}>{(totalAmount || 0).toLocaleString()} ETB</Box> {/* Price column */}
                 <Box sx={{ flex: 1, textAlign: 'right', pr: 2 }}>{(totalSubsidy || 0).toLocaleString()} ETB</Box> {/* Subsidy column */}
-                <Box sx={{ flex: 0.8 }} /> {/* Notes column */}
-                <Box sx={{ flex: 1 }} /> {/* Status column */}
+                <Box sx={{ flex: 1, textAlign: 'right', pr: 2, color: 'primary.main', fontWeight: '900' }}>{((totalAmount - totalSubsidy) || 0).toLocaleString()} ETB</Box> {/* To Pay column */}
+                <Box className="no-print" sx={{ flex: 0.8 }} /> {/* Notes column */}
+                <Box className="no-print" sx={{ flex: 1 }} /> {/* Status column */}
             </Box>
             <GridFooter {...other} />
         </Box>
@@ -84,15 +85,8 @@ const Analysis: React.FC = () => {
         enabled: !!(from && to), // Only fetch when date range is set
     });
 
-    // Calculate summaries for footer and exports
-    // If a specific status is selected, summarize that status. 
-    // If 'All Statuses' is selected, summarize ONLY approved (consumption report).
-    const summaryData = useMemo(() => {
-        if (!selectedStatus) {
-            return data.filter(r => (r.status || 'approved').toLowerCase() === 'approved');
-        }
-        return data;
-    }, [data, selectedStatus]);
+    // Summarize all currently filtered data in the table
+    const summaryData = data;
 
     const totalMeals = summaryData.length;
     const totalAmount = summaryData.reduce((acc, curr) => acc + (curr.price || 0), 0);
@@ -254,28 +248,30 @@ const Analysis: React.FC = () => {
                 row.foodItem?.name || 'Unknown',
                 row.operator?.username || 'N/A',
                 row.price,
-                row.subsidy
+                row.subsidy,
+                (row.price || 0) - (row.subsidy || 0)
             ]);
 
             autoTable(doc, {
-                head: [['Date', 'Customer', 'Department', 'Item', 'Operator', 'Price', 'Subsidy']],
+                head: [['Date', 'Customer', 'Department', 'Item', 'Operator', 'Price', 'Subsidy', 'To Pay']],
                 body: tableData,
                 startY: 50,
                 theme: 'grid',
-                headStyles: { fillColor: [220, 220, 220], textColor: 20, fontStyle: 'bold' }
+                headStyles: { fillColor: [220, 220, 220], textColor: 20, fontStyle: 'bold' },
+                columnStyles: {
+                    5: { halign: 'right' },
+                    6: { halign: 'right' },
+                    7: { halign: 'right' }
+                }
             });
 
             // --- Summary (Dynamic based on filter) ---
             const finalY = (doc as any).lastAutoTable?.finalY || 60;
-            const statusLabel = selectedStatus ? selectedStatus.toUpperCase() : 'APPROVED ONLY';
+            const statusLabel = selectedStatus ? selectedStatus.toUpperCase() : 'ALL STATUSES';
 
-            const summaryExportData = !selectedStatus
-                ? exportData.filter(r => (r.status || 'approved').toLowerCase() === 'approved')
-                : exportData;
-
-            const summaryTotalMeals = summaryExportData.length;
-            const summaryTotalAmount = summaryExportData.reduce((acc, curr) => acc + (curr.price || 0), 0);
-            const summaryTotalSubsidy = summaryExportData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
+            const summaryTotalMeals = exportData.length;
+            const summaryTotalAmount = exportData.reduce((acc, curr) => acc + (curr.price || 0), 0);
+            const summaryTotalSubsidy = exportData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
 
             doc.setFontSize(10);
             doc.setFont("helvetica", "bold");
@@ -285,6 +281,7 @@ const Analysis: React.FC = () => {
             doc.text(`Total Meals: ${summaryTotalMeals}`, 14, finalY + 16);
             doc.text(`Total Amount: ${summaryTotalAmount.toLocaleString()} ETB`, 14, finalY + 22);
             doc.text(`Total Subsidy: ${summaryTotalSubsidy.toLocaleString()} ETB`, 14, finalY + 28);
+            doc.text(`Total To Pay: ${(summaryTotalAmount - summaryTotalSubsidy).toLocaleString()} ETB`, 14, finalY + 34);
 
             // --- Footer ---
             const pageHeight = doc.internal.pageSize.height;
@@ -324,7 +321,7 @@ const Analysis: React.FC = () => {
             ws_data.push([]); // Blank row
 
             // Data Headers
-            ws_data.push(['Date', 'Customer', 'Department', 'Item', 'Operator', 'Price', 'Subsidy']);
+            ws_data.push(['Date', 'Customer', 'Department', 'Item', 'Operator', 'Price', 'Subsidy', 'To Pay']);
 
             // Data Rows
             exportData.forEach(row => {
@@ -335,25 +332,23 @@ const Analysis: React.FC = () => {
                     row.foodItem?.name || 'Unknown',
                     row.operator?.username || 'N/A',
                     row.price,
-                    row.subsidy
+                    row.subsidy,
+                    (row.price || 0) - (row.subsidy || 0)
                 ]);
             });
 
             // Summary (Dynamic based on filter)
-            const statusLabel = selectedStatus ? selectedStatus.toUpperCase() : 'APPROVED ONLY';
-            const summaryExcelData = !selectedStatus
-                ? exportData.filter(r => (r.status || 'approved').toLowerCase() === 'approved')
-                : exportData;
-
-            const totalMealsCalc = summaryExcelData.length;
-            const totalAmountCalc = summaryExcelData.reduce((acc, curr) => acc + (curr.price || 0), 0);
-            const totalSubsidyCalc = summaryExcelData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
+            const statusLabel = selectedStatus ? selectedStatus.toUpperCase() : 'ALL STATUSES';
+            const totalMealsCalc = exportData.length;
+            const totalAmountCalc = exportData.reduce((acc, curr) => acc + (curr.price || 0), 0);
+            const totalSubsidyCalc = exportData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
 
             ws_data.push([]);
             ws_data.push([`SUMMARY (${statusLabel})`]);
             ws_data.push(['Total Meals', totalMealsCalc]);
             ws_data.push(['Total Amount', `${totalAmountCalc} ETB`]);
             ws_data.push(['Total Subsidy', `${totalSubsidyCalc} ETB`]);
+            ws_data.push(['Total To Pay', `${totalAmountCalc - totalSubsidyCalc} ETB`]);
 
             // Create worksheet from data
             const ws = XLSX.utils.aoa_to_sheet(ws_data);
@@ -361,7 +356,7 @@ const Analysis: React.FC = () => {
             // Merge cells for header formatting
             if (!ws['!merges']) ws['!merges'] = [];
             ws['!merges'].push(
-                { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // Title row
+                { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }, // Title row (Updated to 8 cols)
             );
 
             // Set column widths
@@ -372,7 +367,8 @@ const Analysis: React.FC = () => {
                 { wch: 20 }, // Item
                 { wch: 15 }, // Operator
                 { wch: 12 }, // Price
-                { wch: 12 }  // Subsidy
+                { wch: 12 }, // Subsidy
+                { wch: 12 }  // To Pay
             ];
 
             // Append worksheet to workbook
@@ -440,6 +436,15 @@ const Analysis: React.FC = () => {
             headerAlign: 'right',
         },
         {
+            field: 'toPay',
+            headerName: 'To Pay (ETB)',
+            type: 'number',
+            flex: 1,
+            align: 'right',
+            headerAlign: 'right',
+            valueGetter: (_: any, row: OrderRow) => (row.price || 0) - (row.subsidy || 0),
+        },
+        {
             field: 'notes',
             headerName: 'Notes',
             flex: 0.8,
@@ -486,7 +491,8 @@ const Analysis: React.FC = () => {
                         
                         /* Layout Adjustments */
                         .MuiDataGrid-root { border: none !important; }
-                        .MuiDataGrid-footerContainer, .MuiDataGrid-toolbarContainer { display: none !important; }
+                        .MuiDataGrid-footerContainer { display: flex !important; border-top: 1px solid black !important; }
+                        .MuiTablePagination-root, .MuiDataGrid-toolbarContainer { display: none !important; }
                         .MuiDataGrid-virtualScroller { overflow: visible !important; }
 
                         /* Hide Unnecessary Columns for Print */
@@ -779,17 +785,20 @@ const Analysis: React.FC = () => {
                         '@media print': { display: 'block' }
                     }}>
                         <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, textDecoration: 'underline' }}>
-                            Report Summary ({selectedStatus ? selectedStatus.toUpperCase() : 'APPROVED ONLY'})
+                            Report Summary ({selectedStatus ? selectedStatus.toUpperCase() : 'ALL STATUSES'})
                         </Typography>
                         <Grid container spacing={2}>
-                            <Grid size={4}>
+                            <Grid size={3}>
                                 <Typography variant="body1"><strong>Total Meals:</strong> {totalMeals}</Typography>
                             </Grid>
-                            <Grid size={4}>
+                            <Grid size={3}>
                                 <Typography variant="body1"><strong>Total Amount:</strong> {totalAmount.toLocaleString()} ETB</Typography>
                             </Grid>
-                            <Grid size={4}>
+                            <Grid size={3}>
                                 <Typography variant="body1"><strong>Total Subsidy:</strong> {totalSubsidy.toLocaleString()} ETB</Typography>
+                            </Grid>
+                            <Grid size={3}>
+                                <Typography variant="body1"><strong>Total To Pay:</strong> {(totalAmount - totalSubsidy).toLocaleString()} ETB</Typography>
                             </Grid>
                         </Grid>
                     </Box>
