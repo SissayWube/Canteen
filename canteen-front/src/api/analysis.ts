@@ -3,7 +3,7 @@ import api from './api';
 export interface AnalysisOrderRow {
     _id: string;
     timestamp: string;
-    customer: {
+    customer?: {
         name: string;
         department: string;
     };
@@ -17,6 +17,8 @@ export interface AnalysisOrderRow {
     subsidy: number;
     status: string;
     notes?: string;
+    isGuest?: boolean;
+    guestName?: string;
 }
 
 export interface AnalysisFilters {

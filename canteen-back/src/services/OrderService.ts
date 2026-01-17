@@ -348,6 +348,28 @@ class OrderService {
     /**
      * Get orders with filters and pagination
      */
+    /**
+     * Get dashboard stats for today
+     */
+    async getDashboardStats() {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        const [total, approved, pending, rejected] = await Promise.all([
+            Order.countDocuments({ timestamp: { $gte: todayStart, $lte: todayEnd } }),
+            Order.countDocuments({ timestamp: { $gte: todayStart, $lte: todayEnd }, status: 'approved' }),
+            Order.countDocuments({ timestamp: { $gte: todayStart, $lte: todayEnd }, status: 'pending' }),
+            Order.countDocuments({ timestamp: { $gte: todayStart, $lte: todayEnd }, status: 'rejected' }),
+        ]);
+
+        return { total, approved, pending, rejected };
+    }
+
+    /**
+     * Get orders with filters and pagination
+     */
     async getOrders(filters: OrderFilters) {
         const {
             page = 1,
@@ -362,86 +384,54 @@ class OrderService {
 
         const query: any = {};
 
-        // Date range filter
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
-
-        let rangeStart: Date = todayStart;
-        let rangeEnd: Date = todayEnd;
+        // Date range filter (Default to today)
+        const d = new Date();
+        let rangeStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+        let rangeEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 
         if (from) {
-            const parsedFrom = new Date(from);
-            if (isNaN(parsedFrom.getTime())) {
-                throw new AppError('Invalid "from" date format. Use YYYY-MM-DD', 400);
-            }
-            parsedFrom.setHours(0, 0, 0, 0);
-            rangeStart = parsedFrom;
+            const [y, m, day] = from.split('-').map(Number);
+            rangeStart = new Date(y, m - 1, day, 0, 0, 0, 0);
         }
 
         if (to) {
-            const parsedTo = new Date(to);
-            if (isNaN(parsedTo.getTime())) {
-                throw new AppError('Invalid "to" date format. Use YYYY-MM-DD', 400);
-            }
-            parsedTo.setHours(23, 59, 59, 999);
-            rangeEnd = parsedTo;
-        }
-
-        if (rangeStart > rangeEnd) {
-            throw new AppError('"from" date cannot be after "to" date', 400);
+            const [y, m, day] = to.split('-').map(Number);
+            rangeEnd = new Date(y, m - 1, day, 23, 59, 59, 999);
         }
 
         query.timestamp = { $gte: rangeStart, $lte: rangeEnd };
 
-        // Customer filter
-        if (customerId) {
-            if (!mongoose.Types.ObjectId.isValid(customerId)) {
-                throw new AppError('Invalid customerId', 400);
-            }
-            query.customer = new mongoose.Types.ObjectId(customerId);
-        }
-
-        // Department filter
-        if (department && department.trim() !== '') {
+        // 1. Department/Guest Filter
+        if (department === 'Visitor') {
+            query.isGuest = true;
+        } else if (department && department.trim() !== '' && department !== 'All Departments') {
             const customersInDept = await Customer.find({
                 department: { $regex: new RegExp(`^${department.trim()}$`, 'i') },
             }).select('_id');
-
-            if (customersInDept.length === 0) {
-                return {
-                    orders: [],
-                    pagination: { page: 1, limit, total: 0, pages: 0 },
-                    dateRange: {
-                        from: rangeStart.toISOString().split('T')[0],
-                        to: rangeEnd.toISOString().split('T')[0],
-                    },
-                };
-            }
             query.customer = { $in: customersInDept.map(c => c._id) };
+            query.isGuest = { $ne: true };
         }
 
-        // Name search
+        // 2. Customer Filter
+        if (customerId && mongoose.Types.ObjectId.isValid(customerId)) {
+            query.customer = new mongoose.Types.ObjectId(customerId);
+            query.isGuest = { $ne: true };
+        }
+
+        // 3. Name search (matches both regular customers and guests)
         if (search && search.trim() !== '') {
+            const term = search.trim();
             const matchingCustomers = await Customer.find({
-                name: { $regex: search.trim(), $options: 'i' },
+                name: { $regex: term, $options: 'i' },
             }).select('_id');
 
-            if (matchingCustomers.length === 0) {
-                return {
-                    orders: [],
-                    pagination: { page: 1, limit, total: 0, pages: 0 },
-                    dateRange: {
-                        from: rangeStart.toISOString().split('T')[0],
-                        to: rangeEnd.toISOString().split('T')[0],
-                    },
-                };
-            }
-            query.customer = { $in: matchingCustomers.map(c => c._id) };
+            query.$or = [
+                { customer: { $in: matchingCustomers.map(c => c._id) } },
+                { guestName: { $regex: term, $options: 'i' } }
+            ];
         }
 
-        // Status filter
+        // 4. Status filter
         if (status && ['pending', 'approved', 'rejected'].includes(status)) {
             query.status = status;
         }

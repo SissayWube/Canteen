@@ -26,15 +26,24 @@ function CustomFooter(props: any) {
     const { totalMeals, totalAmount, totalSubsidy, ...other } = props;
     return (
         <Box>
-            <Box sx={{ display: 'flex', borderTop: '1px solid #e0e0e0', p: 1, fontWeight: 'bold', bgcolor: '#f5f5f5' }}>
-                <Box sx={{ flex: 1.5 }}>Totals</Box>
-                <Box sx={{ flex: 1.5 }}></Box>
-                <Box sx={{ flex: 1.5 }}></Box>
-                <Box sx={{ flex: 1.5 }}></Box>
-                {/* Total Meals */}
-                <Box sx={{ flex: 1, textAlign: 'right' }}>{totalMeals}  Meals</Box>
-                <Box sx={{ flex: 1, textAlign: 'right' }}>{(totalAmount || 0).toLocaleString()} ETB</Box>
-                <Box sx={{ flex: 1, textAlign: 'right' }}>{(totalSubsidy || 0).toLocaleString()} ETB</Box>
+            <Box sx={{
+                display: 'flex',
+                borderTop: '1px solid #e0e0e0',
+                p: '8px 0',
+                fontWeight: 'bold',
+                bgcolor: '#f5f5f5',
+                alignItems: 'center'
+            }}>
+                <Box sx={{ width: 50 }} /> {/* Checkbox column offset */}
+                <Box sx={{ flex: 1.5, pl: 2 }}>Totals</Box> {/* Date column */}
+                <Box sx={{ flex: 1.5 }} /> {/* Customer column */}
+                <Box sx={{ flex: 1.5 }} /> {/* Department column */}
+                <Box sx={{ flex: 1.5, textAlign: 'right', pr: 2 }}>{totalMeals}  Meals</Box> {/* Item column */}
+                <Box sx={{ flex: 1.2 }} /> {/* Operator column */}
+                <Box sx={{ flex: 1, textAlign: 'right', pr: 2 }}>{(totalAmount || 0).toLocaleString()} ETB</Box> {/* Price column */}
+                <Box sx={{ flex: 1, textAlign: 'right', pr: 2 }}>{(totalSubsidy || 0).toLocaleString()} ETB</Box> {/* Subsidy column */}
+                <Box sx={{ flex: 0.8 }} /> {/* Notes column */}
+                <Box sx={{ flex: 1 }} /> {/* Status column */}
             </Box>
             <GridFooter {...other} />
         </Box>
@@ -75,11 +84,19 @@ const Analysis: React.FC = () => {
         enabled: !!(from && to), // Only fetch when date range is set
     });
 
-    const approvedData = useMemo(() => data.filter(r => (r.status || 'approved').toLowerCase() === 'approved'), [data]);
+    // Calculate summaries for footer and exports
+    // If a specific status is selected, summarize that status. 
+    // If 'All Statuses' is selected, summarize ONLY approved (consumption report).
+    const summaryData = useMemo(() => {
+        if (!selectedStatus) {
+            return data.filter(r => (r.status || 'approved').toLowerCase() === 'approved');
+        }
+        return data;
+    }, [data, selectedStatus]);
 
-    const totalMeals = approvedData.length;
-    const totalAmount = approvedData.reduce((acc, curr) => acc + (curr.price || 0), 0);
-    const totalSubsidy = approvedData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
+    const totalMeals = summaryData.length;
+    const totalAmount = summaryData.reduce((acc, curr) => acc + (curr.price || 0), 0);
+    const totalSubsidy = summaryData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
 
 
     useEffect(() => {
@@ -232,8 +249,8 @@ const Analysis: React.FC = () => {
             // --- Data Table ---
             const tableData = exportData.map((row) => [
                 dayjs(row.timestamp).format('DD/MM/YYYY HH:mm'),
-                row.customer?.name || 'Unknown',
-                row.customer?.department || 'Unknown',
+                row.isGuest ? (row.guestName || 'Guest') : (row.customer?.name || 'Unknown'),
+                row.isGuest ? 'Visitor' : (row.customer?.department || 'Unknown'),
                 row.foodItem?.name || 'Unknown',
                 row.operator?.username || 'N/A',
                 row.price,
@@ -248,16 +265,26 @@ const Analysis: React.FC = () => {
                 headStyles: { fillColor: [220, 220, 220], textColor: 20, fontStyle: 'bold' }
             });
 
-            // --- Summary (Only Approved) ---
+            // --- Summary (Dynamic based on filter) ---
             const finalY = (doc as any).lastAutoTable?.finalY || 60;
-            const approvedExportData = exportData.filter(r => (r.status || 'approved').toLowerCase() === 'approved');
-            const summaryTotalMeals = approvedExportData.length;
-            const summaryTotalAmount = approvedExportData.reduce((acc, curr) => acc + (curr.price || 0), 0);
-            const summaryTotalSubsidy = approvedExportData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
+            const statusLabel = selectedStatus ? selectedStatus.toUpperCase() : 'APPROVED ONLY';
 
-            doc.text(`Total Meals (Approved): ${summaryTotalMeals}`, 14, finalY + 10);
-            doc.text(`Total Amount (Approved): ${summaryTotalAmount.toLocaleString()} ETB`, 14, finalY + 16);
-            doc.text(`Total Subsidy (Approved): ${summaryTotalSubsidy.toLocaleString()} ETB`, 14, finalY + 22);
+            const summaryExportData = !selectedStatus
+                ? exportData.filter(r => (r.status || 'approved').toLowerCase() === 'approved')
+                : exportData;
+
+            const summaryTotalMeals = summaryExportData.length;
+            const summaryTotalAmount = summaryExportData.reduce((acc, curr) => acc + (curr.price || 0), 0);
+            const summaryTotalSubsidy = summaryExportData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
+
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            doc.text(`SUMMARY (${statusLabel})`, 14, finalY + 10);
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Total Meals: ${summaryTotalMeals}`, 14, finalY + 16);
+            doc.text(`Total Amount: ${summaryTotalAmount.toLocaleString()} ETB`, 14, finalY + 22);
+            doc.text(`Total Subsidy: ${summaryTotalSubsidy.toLocaleString()} ETB`, 14, finalY + 28);
 
             // --- Footer ---
             const pageHeight = doc.internal.pageSize.height;
@@ -303,8 +330,8 @@ const Analysis: React.FC = () => {
             exportData.forEach(row => {
                 ws_data.push([
                     dayjs(row.timestamp).format('DD/MM/YYYY HH:mm'),
-                    row.customer?.name || 'Unknown',
-                    row.customer?.department || 'Unknown',
+                    row.isGuest ? (row.guestName || 'Guest') : (row.customer?.name || 'Unknown'),
+                    row.isGuest ? 'Visitor' : (row.customer?.department || 'Unknown'),
                     row.foodItem?.name || 'Unknown',
                     row.operator?.username || 'N/A',
                     row.price,
@@ -312,14 +339,18 @@ const Analysis: React.FC = () => {
                 ]);
             });
 
-            // Summary (Only Approved)
-            const approvedExcelData = exportData.filter(r => (r.status || 'approved').toLowerCase() === 'approved');
-            const totalMealsCalc = approvedExcelData.length;
-            const totalAmountCalc = approvedExcelData.reduce((acc, curr) => acc + (curr.price || 0), 0);
-            const totalSubsidyCalc = approvedExcelData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
+            // Summary (Dynamic based on filter)
+            const statusLabel = selectedStatus ? selectedStatus.toUpperCase() : 'APPROVED ONLY';
+            const summaryExcelData = !selectedStatus
+                ? exportData.filter(r => (r.status || 'approved').toLowerCase() === 'approved')
+                : exportData;
+
+            const totalMealsCalc = summaryExcelData.length;
+            const totalAmountCalc = summaryExcelData.reduce((acc, curr) => acc + (curr.price || 0), 0);
+            const totalSubsidyCalc = summaryExcelData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
 
             ws_data.push([]);
-            ws_data.push(['SUMMARY (APPROVED ONLY)']);
+            ws_data.push([`SUMMARY (${statusLabel})`]);
             ws_data.push(['Total Meals', totalMealsCalc]);
             ws_data.push(['Total Amount', `${totalAmountCalc} ETB`]);
             ws_data.push(['Total Subsidy', `${totalSubsidyCalc} ETB`]);
@@ -372,13 +403,13 @@ const Analysis: React.FC = () => {
             field: 'customer.name',
             headerName: 'Customer',
             flex: 1.5,
-            valueGetter: (_: any, row: OrderRow) => row.customer?.name || 'Unknown',
+            valueGetter: (_: any, row: OrderRow) => row.isGuest ? (row.guestName || 'Guest') : (row.customer?.name || 'Unknown'),
         },
         {
             field: 'customer.department',
             headerName: 'Department',
             flex: 1.5,
-            valueGetter: (_: any, row: OrderRow) => row.customer?.department || 'Unknown',
+            valueGetter: (_: any, row: OrderRow) => row.isGuest ? 'Visitor' : (row.customer?.department || 'Unknown'),
         },
         {
             field: 'foodItem.name',
@@ -668,6 +699,7 @@ const Analysis: React.FC = () => {
                         size="small"
                     >
                         <MenuItem value="All Departments">All Departments</MenuItem>
+                        <MenuItem value="Visitor">Visitor (Guests)</MenuItem>
                         {departments.map(dep => (
                             <MenuItem key={dep} value={dep}>{dep}</MenuItem>
                         ))}
@@ -738,6 +770,29 @@ const Analysis: React.FC = () => {
                             } as any
                         }}
                     />
+                    {/* Printed Summary (Visible only in print) */}
+                    <Box sx={{
+                        display: 'none',
+                        mt: 4,
+                        p: 2,
+                        border: '1px solid black',
+                        '@media print': { display: 'block' }
+                    }}>
+                        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, textDecoration: 'underline' }}>
+                            Report Summary ({selectedStatus ? selectedStatus.toUpperCase() : 'APPROVED ONLY'})
+                        </Typography>
+                        <Grid container spacing={2}>
+                            <Grid size={4}>
+                                <Typography variant="body1"><strong>Total Meals:</strong> {totalMeals}</Typography>
+                            </Grid>
+                            <Grid size={4}>
+                                <Typography variant="body1"><strong>Total Amount:</strong> {totalAmount.toLocaleString()} ETB</Typography>
+                            </Grid>
+                            <Grid size={4}>
+                                <Typography variant="body1"><strong>Total Subsidy:</strong> {totalSubsidy.toLocaleString()} ETB</Typography>
+                            </Grid>
+                        </Grid>
+                    </Box>
                 </Paper>
             )}
 
@@ -772,8 +827,12 @@ const Analysis: React.FC = () => {
                             <Grid container spacing={4}>
                                 <Grid size={{ xs: 12, sm: 6 }}>
                                     <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 'bold' }}>Customer Details</Typography>
-                                    <Typography variant="h6" sx={{ mt: 0.5 }}>{selectedOrderDetails.customer.name}</Typography>
-                                    <Typography variant="body2" color="text.secondary">{selectedOrderDetails.customer.department}</Typography>
+                                    <Typography variant="h6" sx={{ mt: 0.5 }}>
+                                        {selectedOrderDetails.isGuest ? (selectedOrderDetails.guestName || 'Guest') : (selectedOrderDetails.customer?.name || 'Unknown')}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        {selectedOrderDetails.isGuest ? 'Visitor' : (selectedOrderDetails.customer?.department || 'Unknown')}
+                                    </Typography>
                                 </Grid>
 
                                 <Grid size={{ xs: 12, sm: 6 }}>

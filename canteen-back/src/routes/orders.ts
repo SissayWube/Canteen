@@ -34,6 +34,15 @@ router.get('/', async (req: Request, res: Response, next) => {
     }
 });
 
+router.get('/stats', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const stats = await OrderService.getDashboardStats();
+        res.json(stats);
+    } catch (error) {
+        next(error);
+    }
+});
+
 
 
 // POST /api/orders/manual - Manual ticket issuance by operator

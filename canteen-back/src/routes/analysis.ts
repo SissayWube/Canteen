@@ -21,31 +21,80 @@ router.use(requireAuth); // Admin only? Or operator too? (Assume admin for now)
 
 // router.use(requireAdmin);
 
-// GET /api/analysis?type=department&from=2026-01-01&to=2026-01-31
+const buildAnalysisMatch = async (query: any, isOrdersRoute = false) => {
+    const from = query.from as string;
+    const to = query.to as string;
+    const customerId = query.customerId as string;
+    const department = query.department as string;
+    const statusStr = query.status as string;
+    const itemCodeStr = query.itemCode as string;
+    const type = String(query.type || 'orders');
+
+    const match: any = {};
+
+    // Date Logic (Inclusive of end day)
+    if (from || to) {
+        match.timestamp = {};
+        if (from) {
+            // Parse YYYY-MM-DD as local date
+            const [y, m, d] = from.split('-').map(Number);
+            match.timestamp.$gte = new Date(y, m - 1, d, 0, 0, 0, 0);
+        }
+        if (to) {
+            // Parse YYYY-MM-DD as local date
+            const [y, m, d] = to.split('-').map(Number);
+            match.timestamp.$lte = new Date(y, m - 1, d, 23, 59, 59, 999);
+        }
+    }
+
+    // Customer/Department Logic (Intersected)
+    if (department === 'Visitor') {
+        match.isGuest = true;
+        if (customerId) {
+            // Cannot filter by specific customer AND "Visitor" department
+            // as guests don't have MongoDB IDs in Customer collection.
+            match.customer = new mongoose.Types.ObjectId(); // Empty match
+        }
+    } else {
+        const customerQuery: any = {};
+        if (customerId && mongoose.Types.ObjectId.isValid(customerId)) {
+            customerQuery._id = new mongoose.Types.ObjectId(customerId);
+        }
+        if (department && department !== 'All Departments' && department !== '') {
+            customerQuery.department = department;
+        }
+
+        if (Object.keys(customerQuery).length > 0) {
+            const customers = await Customer.find(customerQuery).select('_id');
+            match.customer = { $in: customers.map(c => c._id) };
+            match.isGuest = { $ne: true };
+        }
+    }
+
+    // Status Logic
+    if (statusStr) {
+        match.status = statusStr;
+    } else if (!isOrdersRoute || type !== 'orders') {
+        // Defaults: 'approved' for summaries or non-orders type
+        match.status = 'approved';
+    }
+
+    // Item Logic
+    if (itemCodeStr) {
+        match.workCode = itemCodeStr;
+    }
+
+    return match;
+};
+
+// GET /api/analysis?type=orders&from=2026-01-01&to=2026-01-31
 router.get('/', async (req: Request, res: Response) => {
     try {
-        const { type = 'department', from, to, customerId, department } = req.query;
+        const query = req.query;
+        const type = String(query.type || 'orders');
+        const match = await buildAnalysisMatch(query, true);
 
-        const match: any = {};
-        if (from || to) {
-            match.timestamp = {};
-            if (from) match.timestamp.$gte = new Date(from as string);
-            if (to) {
-                const toDate = new Date(to as string);
-                toDate.setUTCHours(23, 59, 59, 999);
-                match.timestamp.$lte = toDate;
-            }
-        }
-
-        if (customerId) {
-            match['customer._id'] = new mongoose.Types.ObjectId(customerId as string);
-        }
-
-        if (department) {
-            match['customer.department'] = department;
-        }
-
-        const { status, itemCode } = req.query;
+        // 2. Determine Grouping
         let groupBy: any;
         switch (type) {
             case 'department':
@@ -60,33 +109,22 @@ router.get('/', async (req: Request, res: Response) => {
             case 'summary':
                 groupBy = null;
                 break;
-            case 'orders':
-                groupBy = 'orders';
-                break;
             default:
                 groupBy = 'orders';
         }
 
-        if (status) {
-            match.status = status;
-        } else if (groupBy !== 'orders') {
-            // For summaries/totals, default to approved only if no status is specified
-            match.status = 'approved';
-        }
-
+        // 3. Execution Pipeline
         let aggregation;
 
         if (groupBy === 'orders') {
             aggregation = await Order.aggregate([
+                { $match: match },
                 { $lookup: { from: 'customers', localField: 'customer', foreignField: '_id', as: 'customer' } },
-                { $unwind: '$customer' },
-                // Add foodItem lookup
+                { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
                 { $lookup: { from: 'fooditems', localField: 'foodItem', foreignField: '_id', as: 'foodItem' } },
                 { $unwind: { path: '$foodItem', preserveNullAndEmptyArrays: true } },
-                // Add operator lookup
                 { $lookup: { from: 'users', localField: 'operator', foreignField: '_id', as: 'operator' } },
                 { $unwind: { path: '$operator', preserveNullAndEmptyArrays: true } },
-                { $match: match },
                 { $sort: { timestamp: -1 } },
                 {
                     $project: {
@@ -94,20 +132,22 @@ router.get('/', async (req: Request, res: Response) => {
                         timestamp: 1,
                         'customer.name': 1,
                         'customer.department': 1,
-                        'foodItem.name': 1,
+                        foodItem: 1,
                         price: 1,
                         subsidy: 1,
                         'operator.username': 1,
                         status: 1,
-                        notes: 1
+                        notes: 1,
+                        isGuest: 1,
+                        guestName: 1
                     }
                 }
             ]);
         } else {
             aggregation = await Order.aggregate([
-                { $lookup: { from: 'customers', localField: 'customer', foreignField: '_id', as: 'customer' } },
-                { $unwind: '$customer' },
                 { $match: match },
+                { $lookup: { from: 'customers', localField: 'customer', foreignField: '_id', as: 'customer' } },
+                { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
                 {
                     $group: {
                         _id: groupBy,
@@ -121,7 +161,6 @@ router.get('/', async (req: Request, res: Response) => {
         }
 
         if (type === 'customer' && aggregation.length > 0) {
-            // Resolve customer names
             const customerIds = aggregation.map(a => a._id).filter(id => id !== null);
             const customers = await Customer.find({ _id: { $in: customerIds } }).select('name');
             const customerMap = new Map(customers.map(c => [c._id.toString(), c.name]));
@@ -141,18 +180,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.get('/totals', async (req: Request, res: Response) => {
     try {
-        const { from, to, department, customerId, itemCode } = req.query;
-
-        const match: any = { status: 'approved' }; // Always filter by approved for totals
-        if (from) match.timestamp = { ...match.timestamp, $gte: new Date(from as string) };
-        if (to) match.timestamp = { ...match.timestamp, $lte: new Date(to as string) };
-        if (customerId) match.customer = new mongoose.Types.ObjectId(customerId as string);
-        if (itemCode) match.workCode = itemCode as string;
-
-        if (department) {
-            const customers = await Customer.find({ department: department as string }).select('_id');
-            match.customer = { $in: customers.map(c => c._id) };
-        }
+        const match = await buildAnalysisMatch(req.query);
 
         const totals = await Order.aggregate([
             { $match: match },
@@ -162,7 +190,7 @@ router.get('/totals', async (req: Request, res: Response) => {
                     totalOrders: { $sum: 1 },
                     totalPrice: { $sum: "$price" },
                     totalSubsidy: { $sum: "$subsidy" },
-                    totalMealsByItem: { $addToSet: "$foodItem.name" }, // For unique items
+                    totalMealsByItem: { $addToSet: "$foodItem.name" },
                 },
             },
         ]);
@@ -173,14 +201,10 @@ router.get('/totals', async (req: Request, res: Response) => {
     }
 });
 
-// GET /api/analysis/grouped?groupBy=department&from=...&to=... (returns grouped counts/totals)
 router.get('/grouped', async (req: Request, res: Response) => {
     try {
-        const { groupBy = 'department', from, to } = req.query;
-
-        const match: any = { status: 'approved' }; // Always filter by approved for grouped summaries
-        if (from) match.timestamp = { ...match.timestamp, $gte: new Date(from as string) };
-        if (to) match.timestamp = { ...match.timestamp, $lte: new Date(to as string) };
+        const { groupBy = 'department' } = req.query;
+        const match = await buildAnalysisMatch(req.query);
 
         let groupField: any;
         switch (groupBy) {

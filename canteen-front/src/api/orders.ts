@@ -24,6 +24,8 @@ export interface OrderFilters {
     page?: number;
     limit?: number;
     customerId?: string;
+    department?: string;
+    search?: string;
 }
 
 export const ordersApi = {
@@ -35,8 +37,15 @@ export const ordersApi = {
         if (filters?.page) params.append('page', filters.page.toString());
         if (filters?.limit) params.append('limit', filters.limit.toString());
         if (filters?.customerId) params.append('customerId', filters.customerId);
+        if (filters?.department) params.append('department', filters.department);
+        if (filters?.search) params.append('search', filters.search);
 
         const { data } = await api.get<{ orders: Order[], pagination: { page: number, limit: number, total: number, pages: number } }>(`/orders?${params.toString()}`);
+        return data;
+    },
+
+    getStats: async () => {
+        const { data } = await api.get<{ total: number, approved: number, pending: number, rejected: number }>('/orders/stats');
         return data;
     },
 

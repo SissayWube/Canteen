@@ -18,10 +18,12 @@ import {
     Dialog,
     DialogTitle,
     DialogContent,
+    DialogContentText,
     DialogActions,
     IconButton,
     TablePagination,
-    MenuItem
+    MenuItem,
+    Snackbar
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -46,6 +48,210 @@ import { Autocomplete, TextField } from '@mui/material';
 import { Edit as EditIcon, Save as SaveIcon } from '@mui/icons-material';
 import TableSkeleton from '../components/TableSkeleton';
 
+interface OrderDetailsModalProps {
+    open: boolean;
+    order: Order | null;
+    onClose: () => void;
+    onApprove: () => void;
+    onReject: () => void;
+    onEnterEditMode: () => void;
+    isEditing: boolean;
+    editLoading: boolean;
+    customers: Customer[];
+    foodItems: FoodItem[];
+    editFormData: any;
+    setEditFormData: (data: any) => void;
+    onUpdateOrder: () => void;
+    onCancelEdit: () => void;
+    actionLoading: boolean;
+}
+
+const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
+    open, order, onClose, onApprove, onReject, onEnterEditMode,
+    isEditing, editLoading, customers, foodItems, editFormData,
+    setEditFormData, onUpdateOrder, onCancelEdit, actionLoading
+}) => {
+    if (!order) return null;
+
+    return (
+        <Dialog
+            open={open}
+            onClose={onClose}
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}
+        >
+            <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'background.default' }}>
+                <Typography variant="h6" fontWeight="bold">Order Details</Typography>
+                <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+            </DialogTitle>
+
+            <DialogContent dividers sx={{ p: 3 }}>
+                <Box sx={{ mb: 3 }}>
+                    <Alert
+                        severity={order.status === 'approved' ? 'success' : order.status === 'pending' ? 'warning' : 'error'}
+                        sx={{ borderRadius: 2, fontWeight: 'bold', py: 0.5 }}
+                    >
+                        Status: {order.status.toUpperCase()}
+                    </Alert>
+                </Box>
+
+                <Grid container spacing={2}>
+                    {isEditing ? (
+                        <>
+                            <Grid size={{ xs: 12 }}>
+                                <TextField
+                                    select
+                                    label="Order Type"
+                                    value={editFormData.isGuest ? 'guest' : 'employee'}
+                                    onChange={(e) => setEditFormData({ ...editFormData, isGuest: e.target.value === 'guest' })}
+                                    fullWidth
+                                    size="small"
+                                    sx={{ mb: 2 }}
+                                >
+                                    <MenuItem value="employee">Employee</MenuItem>
+                                    <MenuItem value="guest">Guest</MenuItem>
+                                </TextField>
+
+                                {editFormData.isGuest ? (
+                                    <TextField
+                                        label="Guest Name"
+                                        value={editFormData.guestName}
+                                        onChange={(e) => setEditFormData({ ...editFormData, guestName: e.target.value })}
+                                        fullWidth
+                                        size="small"
+                                        required
+                                    />
+                                ) : (
+                                    <Autocomplete
+                                        options={customers}
+                                        getOptionLabel={(option) => `${option.name} (${option.department})`}
+                                        value={customers.find(c => c._id === editFormData.customerId) || null}
+                                        onChange={(_, newValue) => setEditFormData({ ...editFormData, customerId: newValue?._id || '' })}
+                                        renderInput={(params) => <TextField {...params} label="Customer" fullWidth size="small" />}
+                                    />
+                                )}
+                            </Grid>
+
+                            <Grid size={{ xs: 12 }}>
+                                <Autocomplete
+                                    options={foodItems}
+                                    getOptionLabel={(option) => `${option.name} (${option.price} ETB)`}
+                                    value={foodItems.find(f => f.code === editFormData.foodItemCode) || null}
+                                    onChange={(_, newValue) => setEditFormData({ ...editFormData, foodItemCode: newValue?.code || '' })}
+                                    renderInput={(params) => <TextField {...params} label="Food Item" fullWidth size="small" />}
+                                />
+                            </Grid>
+
+                            <Grid size={{ xs: 12 }}>
+                                <TextField
+                                    label="Notes"
+                                    value={editFormData.notes}
+                                    onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                                    fullWidth
+                                    multiline
+                                    rows={2}
+                                    size="small"
+                                />
+                            </Grid>
+                        </>
+                    ) : (
+                        <>
+                            <Grid size={{ xs: 6 }}>
+                                <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 'bold' }}>Customer</Typography>
+                                <Typography variant="body1" fontWeight="bold">{order.isGuest ? (order.guestName || 'Guest') : order.customer?.name}</Typography>
+                                <Typography variant="body2" color="text.secondary">{order.isGuest ? 'Visitor' : order.customer?.department}</Typography>
+                            </Grid>
+
+                            <Grid size={{ xs: 6 }}>
+                                <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 'bold' }}>Meal</Typography>
+                                <Typography variant="body1" fontWeight="bold">{order.foodItem?.name || 'N/A'}</Typography>
+                                <Typography variant="body2" color="text.secondary">Code: {order.workCode}</Typography>
+                            </Grid>
+
+                            <Grid size={{ xs: 12 }}>
+                                <Divider sx={{ my: 1 }} />
+                                <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 2 }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                        <Typography variant="body2">Price:</Typography>
+                                        <Typography variant="body2">{order.currency} {order.price.toFixed(2)}</Typography>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <Typography variant="body2">Subsidy:</Typography>
+                                        <Typography variant="body2" color="success.main">-{order.currency} {order.subsidy.toFixed(2)}</Typography>
+                                    </Box>
+                                    <Divider sx={{ my: 1 }} />
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <Typography variant="subtitle2" fontWeight="bold">To Pay:</Typography>
+                                        <Typography variant="subtitle2" fontWeight="bold" color="primary.main">
+                                            {order.currency} {(order.price - order.subsidy).toFixed(2)}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                            </Grid>
+
+                            {order.notes && (
+                                <Grid size={{ xs: 12 }}>
+                                    <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 'bold' }}>Notes</Typography>
+                                    <Typography variant="body2" sx={{ fontStyle: 'italic', bgcolor: '#fffde7', p: 1, borderRadius: 1 }}>
+                                        "{order.notes}"
+                                    </Typography>
+                                </Grid>
+                            )}
+                        </>
+                    )}
+                </Grid>
+            </DialogContent>
+
+            <DialogActions sx={{ p: 2, bgcolor: 'background.default', gap: 1 }}>
+                {isEditing ? (
+                    <>
+                        <Button variant="outlined" color="inherit" onClick={onCancelEdit} disabled={editLoading} size="small">Cancel</Button>
+                        <Button
+                            variant="contained"
+                            onClick={onUpdateOrder}
+                            disabled={editLoading}
+                            startIcon={editLoading ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+                            size="small"
+                        >
+                            Save
+                        </Button>
+                    </>
+                ) : (
+                    <>
+                        {order.status === 'pending' && (
+                            <>
+                                <Button variant="outlined" startIcon={<EditIcon />} onClick={onEnterEditMode} size="small">Edit</Button>
+                                <Button
+                                    variant="contained"
+                                    color="success"
+                                    onClick={onApprove}
+                                    disabled={actionLoading}
+                                    startIcon={actionLoading ? <CircularProgress size={16} color="inherit" /> : <ApproveIcon />}
+                                    size="small"
+                                >
+                                    Approve
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    color="error"
+                                    onClick={onReject}
+                                    disabled={actionLoading}
+                                    startIcon={actionLoading ? <CircularProgress size={16} color="inherit" /> : <RejectIcon />}
+                                    size="small"
+                                >
+                                    Reject
+                                </Button>
+                            </>
+                        )}
+                        <Button variant="text" color="inherit" onClick={onClose} size="small">Close</Button>
+                    </>
+                )}
+            </DialogActions>
+        </Dialog>
+    );
+};
+
 const Dashboard: React.FC = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -53,12 +259,35 @@ const Dashboard: React.FC = () => {
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [confirmRejectOpen, setConfirmRejectOpen] = useState(false);
+    const [confirmApproveOpen, setConfirmApproveOpen] = useState(false);
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+        open: false,
+        message: '',
+        severity: 'success'
+    });
     const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null);
     const [fromDate, setFromDate] = useState<Dayjs | null>(dayjs());
     const [toDate, setToDate] = useState<Dayjs | null>(dayjs());
     const [page, setPage] = useState(0);
 
     const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+    const [selectedStatus, setSelectedStatus] = useState<string>('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+
+    // Debounce search
+    React.useEffect(() => {
+        const handler = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+        return () => clearTimeout(handler);
+    }, [searchTerm]);
+
+    // Fetch Stats
+    const { data: stats } = useQuery({
+        queryKey: ['orderStats'],
+        queryFn: () => ordersApi.getStats(),
+        refetchInterval: 30000,
+    });
 
     // Edit Mode State
     const [isEditing, setIsEditing] = useState(false);
@@ -99,6 +328,7 @@ const Dashboard: React.FC = () => {
             setIsEditing(true);
         } catch (error) {
             console.error('Failed to load edit data', error);
+            setSnackbar({ open: true, message: 'Failed to load data for editing.', severity: 'error' });
         } finally {
             setEditLoading(false);
         }
@@ -116,9 +346,15 @@ const Dashboard: React.FC = () => {
                 notes: editFormData.notes
             });
             queryClient.invalidateQueries({ queryKey: ['orders'] });
+            setSnackbar({ open: true, message: 'Order updated successfully!', severity: 'success' });
             setSelectedOrder(null); // Close modal
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to update order', error);
+            setSnackbar({
+                open: true,
+                message: error.response?.data?.message || 'Failed to update order.',
+                severity: 'error'
+            });
         } finally {
             setEditLoading(false);
         }
@@ -126,21 +362,25 @@ const Dashboard: React.FC = () => {
 
     const [filterCustomers, setFilterCustomers] = useState<Customer[]>([]);
     const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+    const [departments, setDepartments] = useState<string[]>([]);
 
-    // Fetch customers for filter on mount
+    // Fetch customers and departments for filter on mount
     React.useEffect(() => {
         customersApi.getAll({ limit: 1000 }).then(res => {
             setFilterCustomers(res.customers);
+            const depts = Array.from(new Set(res.customers.map(c => c.department).filter(Boolean)));
+            setDepartments(depts.sort());
         }).catch(err => console.error('Failed to load customers for filter', err));
     }, []);
-
-
 
     // Build filters
     const filters: OrderFilters = {
         page: page + 1,
         limit: rowsPerPage,
-        customerId: selectedCustomerId || undefined
+        customerId: selectedCustomerId || undefined,
+        department: selectedDepartment || undefined,
+        status: (selectedStatus as any) || undefined,
+        search: debouncedSearch || undefined
     };
     if (fromDate) filters.from = fromDate.format('YYYY-MM-DD');
     if (toDate) filters.to = toDate.format('YYYY-MM-DD');
@@ -157,6 +397,7 @@ const Dashboard: React.FC = () => {
     // Real-time updates using Socket.io
     useSocketEvent('newPendingOrder', (eventData: any) => {
         queryClient.invalidateQueries({ queryKey: ['orders'] });
+        queryClient.invalidateQueries({ queryKey: ['orderStats'] });
         if (eventData?.orderId) {
             setHighlightOrderId(eventData.orderId);
             setTimeout(() => setHighlightOrderId(null), 3000);
@@ -165,10 +406,12 @@ const Dashboard: React.FC = () => {
 
     useSocketEvent('orderApproved', () => {
         queryClient.invalidateQueries({ queryKey: ['orders'] });
+        queryClient.invalidateQueries({ queryKey: ['orderStats'] });
     });
 
     useSocketEvent('orderRejected', (eventData: any) => {
         queryClient.invalidateQueries({ queryKey: ['orders'] });
+        queryClient.invalidateQueries({ queryKey: ['orderStats'] });
         if (selectedOrder?._id === eventData.orderId) {
             setSelectedOrder(null);
         }
@@ -180,28 +423,47 @@ const Dashboard: React.FC = () => {
         try {
             await ordersApi.approve(selectedOrder._id);
             queryClient.invalidateQueries({ queryKey: ['orders'] });
+            queryClient.invalidateQueries({ queryKey: ['orderStats'] });
+            setSnackbar({ open: true, message: 'Order approved successfully!', severity: 'success' });
             setSelectedOrder(null);
-        } catch (error) {
+            setConfirmApproveOpen(false);
+        } catch (error: any) {
             console.error('Failed to approve order:', error);
+            setSnackbar({
+                open: true,
+                message: error.response?.data?.message || 'Failed to approve order.',
+                severity: 'error'
+            });
         } finally {
             setActionLoading(false);
         }
     };
 
-    const handleReject = async () => {
-        if (!selectedOrder) return;
+    const handleReject = (e?: React.MouseEvent, tx?: Order) => {
+        if (e) e.stopPropagation();
+        if (tx) {
+            setSelectedOrder(tx);
+        }
         setConfirmRejectOpen(true);
     };
 
     const handleRejectConfirm = async () => {
-        setConfirmRejectOpen(false);
+        if (!selectedOrder) return;
         setActionLoading(true);
         try {
-            await ordersApi.reject(selectedOrder!._id);
+            await ordersApi.reject(selectedOrder._id);
             queryClient.invalidateQueries({ queryKey: ['orders'] });
+            queryClient.invalidateQueries({ queryKey: ['orderStats'] });
+            setSnackbar({ open: true, message: 'Order rejected successfully!', severity: 'success' });
             setSelectedOrder(null);
-        } catch (error) {
+            setConfirmRejectOpen(false);
+        } catch (error: any) {
             console.error('Failed to reject order:', error);
+            setSnackbar({
+                open: true,
+                message: error.response?.data?.message || 'Failed to reject order.',
+                severity: 'error'
+            });
         } finally {
             setActionLoading(false);
         }
@@ -209,10 +471,10 @@ const Dashboard: React.FC = () => {
 
     return (
         <Box sx={{ p: 2 }}>
-            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>Dashboard</Typography>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 0.5 }}>Dashboard</Typography>
+                    <Typography variant="body2" color="text.secondary">
                         Welcome back, {user?.fullName || user?.username}!
                     </Typography>
                 </Box>
@@ -221,27 +483,96 @@ const Dashboard: React.FC = () => {
                 </Button>
             </Box>
 
-            <Paper sx={{ p: 2, mb: 3 }}>
-                <Grid container spacing={2} alignItems="center">
-                    <Grid size={{ xs: 12, sm: 3 }}>
+            {/* Summary Cards */}
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+                {[
+                    { label: "Today's Orders", value: stats?.total || 0, color: '#1976d2', icon: <FilterIcon fontSize="small" /> },
+                    { label: "Approved Today", value: stats?.approved || 0, color: '#2e7d32', icon: <ApproveIcon fontSize="small" /> },
+                    { label: "Pending Today", value: stats?.pending || 0, color: '#ed6c02', icon: <CircularProgress size={16} color="inherit" /> },
+                    { label: "Rejected Today", value: stats?.rejected || 0, color: '#d32f2f', icon: <RejectIcon fontSize="small" /> },
+                ].map((card, index) => (
+                    <Grid key={index} size={{ xs: 12, sm: 6, md: 3 }}>
+                        <Paper sx={{
+                            p: 1.5,
+                            borderRadius: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1.5,
+                            borderLeft: `4px solid ${card.color}`,
+                            transition: 'transform 0.1s',
+                            '&:hover': { transform: 'translateY(-2px)' }
+                        }}>
+                            <Box sx={{
+                                bgcolor: `${card.color}15`,
+                                color: card.color,
+                                p: 1,
+                                borderRadius: 1.5,
+                                display: 'flex'
+                            }}>
+                                {card.icon}
+                            </Box>
+                            <Box>
+                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '0.65rem' }}>
+                                    {card.label}
+                                </Typography>
+                                <Typography variant="h5" sx={{ fontWeight: '800', lineHeight: 1.2 }}>
+                                    {card.value}
+                                </Typography>
+                            </Box>
+                        </Paper>
+                    </Grid>
+                ))}
+            </Grid>
+
+            <Paper sx={{ p: 1.5, mb: 2 }}>
+                <Grid container spacing={1.5} alignItems="center">
+                    <Grid size={{ xs: 12, sm: 3, md: 2 }}>
+                        <TextField
+                            fullWidth
+                            label="Search Name"
+                            placeholder="Employee/Guest..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            size="small"
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 3, md: 1.5 }}>
                         <DatePicker
-                            label="From Date"
+                            label="From"
                             value={fromDate}
                             onChange={(newValue) => setFromDate(newValue)}
                             maxDate={toDate || undefined}
                             slotProps={{ textField: { fullWidth: true, size: 'small' } }}
                         />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 3 }}>
+                    <Grid size={{ xs: 12, sm: 3, md: 1.5 }}>
                         <DatePicker
-                            label="To Date"
+                            label="To"
                             value={toDate}
                             onChange={(newValue) => setToDate(newValue)}
                             minDate={fromDate || undefined}
                             slotProps={{ textField: { fullWidth: true, size: 'small' } }}
                         />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 3 }}>
+                    <Grid size={{ xs: 12, sm: 3, md: 1.5 }}>
+                        <TextField
+                            select
+                            fullWidth
+                            label="Status"
+                            value={selectedStatus || 'all'}
+                            onChange={(e) => {
+                                setSelectedStatus(e.target.value === 'all' ? '' : e.target.value);
+                                setPage(0);
+                            }}
+                            size="small"
+                        >
+                            <MenuItem value="all">All Statuses</MenuItem>
+                            <MenuItem value="approved">Approved</MenuItem>
+                            <MenuItem value="pending">Pending</MenuItem>
+                            <MenuItem value="rejected">Rejected</MenuItem>
+                        </TextField>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4, md: 2 }}>
                         <Autocomplete
                             options={filterCustomers}
                             getOptionLabel={(option) => `${option.name} (${option.deviceId})`}
@@ -250,29 +581,58 @@ const Dashboard: React.FC = () => {
                                 setSelectedCustomerId(newValue?._id || '');
                                 setPage(0);
                             }}
-                            renderInput={(params) => <TextField {...params} label="Filter by Customer" size="small" />}
+                            renderInput={(params) => <TextField {...params} label="Customer" size="small" />}
                         />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 3 }} sx={{ display: 'flex', gap: 2 }}>
+                    <Grid size={{ xs: 12, sm: 4, md: 1.5 }}>
+                        <TextField
+                            select
+                            fullWidth
+                            label="Department"
+                            value={selectedDepartment || 'All Departments'}
+                            onChange={(e) => {
+                                setSelectedDepartment(e.target.value === 'All Departments' ? '' : e.target.value);
+                                setPage(0);
+                            }}
+                            size="small"
+                        >
+                            <MenuItem value="All Departments">All Departments</MenuItem>
+                            <MenuItem value="Visitor">Visitor (Guests)</MenuItem>
+                            {departments.map(dep => (
+                                <MenuItem key={dep} value={dep}>{dep}</MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4, md: 2 }} sx={{ display: 'flex', gap: 1 }}>
                         <Button
                             variant="outlined"
+                            fullWidth
                             onClick={() => {
                                 setFromDate(dayjs());
                                 setToDate(dayjs());
                                 setSelectedCustomerId('');
+                                setSelectedDepartment('');
+                                setSelectedStatus('');
+                                setSearchTerm('');
+                                setPage(0);
                             }}
-                            startIcon={<FilterIcon />}
+                            size="small"
                         >
                             Today
                         </Button>
                         <Button
                             variant="outlined"
+                            fullWidth
                             onClick={() => {
                                 setFromDate(null);
                                 setToDate(null);
                                 setSelectedCustomerId('');
+                                setSelectedDepartment('');
+                                setSelectedStatus('');
+                                setSearchTerm('');
                                 setPage(0);
                             }}
+                            size="small"
                         >
                             Reset
                         </Button>
@@ -284,7 +644,7 @@ const Dashboard: React.FC = () => {
                 <Grid size={{ xs: 12 }}>
                     <Paper sx={{ p: 0, borderRadius: 2, overflow: 'hidden' }}>
                         <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="h6">Orders ({orders.length})</Typography>
+                            <Typography variant="h6">Recent Activity ({totalOrders})</Typography>
                         </Box>
                         {isLoading ? (
                             <TableSkeleton rows={10} />
@@ -292,7 +652,7 @@ const Dashboard: React.FC = () => {
                             <Alert severity="error" sx={{ m: 2 }}>Failed to load orders</Alert>
                         ) : (
                             <>
-                                <TableContainer sx={{ maxHeight: 'calc(100vh - 280px)' }}>
+                                <TableContainer sx={{ maxHeight: 'calc(100vh - 400px)' }}>
                                     <Table stickyHeader size="small">
                                         <TableHead>
                                             <TableRow>
@@ -302,71 +662,108 @@ const Dashboard: React.FC = () => {
                                                 <TableCell>Meal Code</TableCell>
                                                 <TableCell align="right">Price</TableCell>
                                                 <TableCell align="right">Subsidy</TableCell>
+                                                <TableCell align="right">To Pay</TableCell>
                                                 <TableCell align="center">Notes</TableCell>
                                                 <TableCell>Date & Time</TableCell>
                                                 <TableCell align="center">Status</TableCell>
-                                                <TableCell align="center">Action</TableCell>
+                                                <TableCell align="center">Actions</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
-                                            {orders
-                                                .map((tx) => (
-                                                    <HighlightedTableRow
-                                                        key={tx._id}
-                                                        hover
-                                                        onClick={() => setSelectedOrder(tx)}
-                                                        sx={{ cursor: 'pointer' }}
-                                                        className={highlightOrderId === tx._id ? 'new-order' : ''}
-                                                    >
-                                                        <TableCell>
-                                                            <Typography variant="subtitle2" fontWeight="bold">
-                                                                {tx.isGuest ? (tx.guestName || 'Guest') : (tx.customer?.name || 'Unknown')}
-                                                            </Typography>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {tx.isGuest ? 'Visitor' : (tx.customer?.department || 'Unknown')}
-                                                        </TableCell>
-                                                        <TableCell>{tx.foodItem?.name || 'Unknown'}</TableCell>
-                                                        <TableCell><Typography variant="body2" sx={{ fontFamily: 'monospace', bgcolor: 'action.hover', px: 1, borderRadius: 1, display: 'inline-block' }}>{tx.workCode}</Typography></TableCell>
-                                                        <TableCell align="right">{tx.currency} {tx.price.toFixed(2)}</TableCell>
-                                                        <TableCell align="right" sx={{ color: 'success.main', fontWeight: 'bold' }}>{tx.subsidy > 0 ? `-${tx.currency} ${tx.subsidy.toFixed(2)}` : '-'}</TableCell>
-                                                        <TableCell align="center">
-                                                            {tx.notes && (
-                                                                <Tooltip title={tx.notes} arrow placement="top">
-                                                                    <CommentIcon color="action" fontSize="small" />
-                                                                </Tooltip>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>{dayjs(tx.timestamp).format('DD/MM/YYYY HH:mm')}</TableCell>
-                                                        <TableCell align="center">
-                                                            <Chip
-                                                                label={tx.status?.toUpperCase()}
-                                                                color={tx.status === 'approved' ? 'success' : tx.status === 'pending' ? 'warning' : 'error'}
-                                                                size="small"
-                                                                variant="outlined"
-                                                                sx={{ fontWeight: 'bold', minWidth: 80 }}
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell align="center">
-                                                            {tx.status === 'pending' && (
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setSelectedOrder(tx);
-                                                                    }}
-                                                                >
-                                                                    <EditIcon fontSize="small" />
+                                            {orders.map((tx) => (
+                                                <HighlightedTableRow
+                                                    key={tx._id}
+                                                    hover
+                                                    onClick={() => setSelectedOrder(tx)}
+                                                    sx={{ cursor: 'pointer' }}
+                                                    className={highlightOrderId === tx._id ? 'new-order' : ''}
+                                                >
+                                                    <TableCell>
+                                                        <Typography variant="subtitle2" fontWeight="bold">
+                                                            {tx.isGuest ? (tx.guestName || 'Guest') : (tx.customer?.name || 'Unknown')}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {tx.isGuest ? (
+                                                            <Chip label="Visitor" size="small" sx={{ bgcolor: '#e3f2fd', color: '#1976d2', fontWeight: 'bold' }} />
+                                                        ) : (tx.customer?.department || 'Unknown')}
+                                                    </TableCell>
+                                                    <TableCell>{tx.foodItem?.name || 'Unknown'}</TableCell>
+                                                    <TableCell><Typography variant="body2" sx={{ fontFamily: 'monospace', bgcolor: 'action.hover', px: 1, borderRadius: 1, display: 'inline-block' }}>{tx.workCode}</Typography></TableCell>
+                                                    <TableCell align="right">{tx.currency} {tx.price.toFixed(2)}</TableCell>
+                                                    <TableCell align="right" sx={{ color: 'success.main', fontWeight: 'bold' }}>{tx.subsidy > 0 ? `-${tx.currency} ${tx.subsidy.toFixed(2)}` : '-'}</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                                        {tx.currency} {(tx.price - tx.subsidy).toFixed(2)}
+                                                    </TableCell>
+                                                    <TableCell align="center">
+                                                        {tx.notes && (
+                                                            <Tooltip title={tx.notes} arrow placement="top">
+                                                                <CommentIcon color="action" fontSize="small" />
+                                                            </Tooltip>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>{dayjs(tx.timestamp).format('DD/MM/YYYY HH:mm')}</TableCell>
+                                                    <TableCell align="center">
+                                                        <Chip
+                                                            label={tx.status?.toUpperCase()}
+                                                            color={tx.status === 'approved' ? 'success' : tx.status === 'pending' ? 'warning' : 'error'}
+                                                            size="small"
+                                                            variant="filled"
+                                                            sx={{ fontWeight: 'bold', minWidth: 85, color: 'white' }}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell align="center">
+                                                        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
+                                                            {tx.status === 'pending' ? (
+                                                                <>
+                                                                    <Tooltip title="Approve">
+                                                                        <IconButton
+                                                                            size="small"
+                                                                            color="success"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setSelectedOrder(tx);
+                                                                                setConfirmApproveOpen(true);
+                                                                            }}
+                                                                            disabled={actionLoading}
+                                                                        >
+                                                                            <ApproveIcon fontSize="small" />
+                                                                        </IconButton>
+                                                                    </Tooltip>
+                                                                    <Tooltip title="Reject">
+                                                                        <IconButton
+                                                                            size="small"
+                                                                            color="error"
+                                                                            onClick={(e) => handleReject(e, tx)}
+                                                                            disabled={actionLoading}
+                                                                        >
+                                                                            <RejectIcon fontSize="small" />
+                                                                        </IconButton>
+                                                                    </Tooltip>
+                                                                    <Tooltip title="Edit">
+                                                                        <IconButton
+                                                                            size="small"
+                                                                            onClick={(e) => { e.stopPropagation(); setSelectedOrder(tx); }}
+                                                                            disabled={actionLoading}
+                                                                        >
+                                                                            <EditIcon fontSize="small" />
+                                                                        </IconButton>
+                                                                    </Tooltip>
+                                                                </>
+                                                            ) : (
+                                                                <IconButton size="small" disabled>
+                                                                    <CloseIcon fontSize="small" sx={{ opacity: 0.3 }} />
                                                                 </IconButton>
                                                             )}
-                                                        </TableCell>
-                                                    </HighlightedTableRow>
-                                                ))}
+                                                        </Box>
+                                                    </TableCell>
+                                                </HighlightedTableRow>
+                                            ))}
                                         </TableBody>
                                     </Table>
                                 </TableContainer>
                                 <TablePagination
-                                    rowsPerPageOptions={[5, 10, 25]}
+                                    rowsPerPageOptions={[5, 10, 25, 50]}
                                     component="div"
                                     count={totalOrders}
                                     rowsPerPage={rowsPerPage}
@@ -384,217 +781,61 @@ const Dashboard: React.FC = () => {
             </Grid>
 
             {/* Order Details Modal */}
-            <Dialog
-                open={Boolean(selectedOrder)}
+            <OrderDetailsModal
+                open={!!selectedOrder && !confirmRejectOpen && !confirmApproveOpen && !actionLoading}
+                order={selectedOrder}
                 onClose={() => setSelectedOrder(null)}
-                maxWidth="sm"
-                fullWidth
+                onApprove={() => setConfirmApproveOpen(true)}
+                onReject={() => handleReject()}
+                onEnterEditMode={handleEnterEditMode}
+                isEditing={isEditing}
+                editLoading={editLoading}
+                customers={customers}
+                foodItems={foodItems}
+                editFormData={editFormData}
+                setEditFormData={setEditFormData}
+                onUpdateOrder={handleUpdateOrder}
+                onCancelEdit={() => setIsEditing(false)}
+                actionLoading={actionLoading}
+            />
+
+            {/* Confirmation Dialogs */}
+            <Dialog
+                open={confirmApproveOpen}
+                onClose={() => setConfirmApproveOpen(false)}
                 PaperProps={{
-                    sx: { borderRadius: 3, overflow: 'hidden' }
+                    sx: { borderRadius: 3 }
                 }}
             >
-                {selectedOrder && (
-                    <>
-                        <DialogTitle sx={{ m: 0, p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'background.default' }}>
-                            <Typography variant="h6" fontWeight="bold">Order Details</Typography>
-                            <IconButton onClick={() => setSelectedOrder(null)} size="small">
-                                <CloseIcon />
-                            </IconButton>
-                        </DialogTitle>
-
-                        <DialogContent dividers sx={{ p: 4 }}>
-                            <Box sx={{ mb: 4 }}>
-                                <Alert
-                                    severity={selectedOrder.status === 'approved' ? 'success' : selectedOrder.status === 'pending' ? 'warning' : 'error'}
-                                    sx={{ borderRadius: 2, fontWeight: 'bold' }}
-                                >
-                                    Current Status: {selectedOrder.status.toUpperCase()}
-                                </Alert>
-                            </Box>
-
-                            <Grid container spacing={4}>
-                                {isEditing ? (
-                                    <>
-                                        <Grid size={{ xs: 12 }}>
-                                            <TextField
-                                                select
-                                                label="Order Type"
-                                                value={editFormData.isGuest ? 'guest' : 'employee'}
-                                                onChange={(e) => setEditFormData({ ...editFormData, isGuest: e.target.value === 'guest' })}
-                                                fullWidth
-                                                size="small"
-                                                sx={{ mb: 2 }}
-                                            >
-                                                <MenuItem value="employee">Employee</MenuItem>
-                                                <MenuItem value="guest">Guest</MenuItem>
-                                            </TextField>
-
-                                            {editFormData.isGuest ? (
-                                                <TextField
-                                                    label="Guest Name"
-                                                    value={editFormData.guestName}
-                                                    onChange={(e) => setEditFormData({ ...editFormData, guestName: e.target.value })}
-                                                    fullWidth
-                                                    size="small"
-                                                    required
-                                                />
-                                            ) : (
-                                                <Autocomplete
-                                                    options={customers}
-                                                    getOptionLabel={(option) => `${option.name} (${option.department})`}
-                                                    value={customers.find(c => c._id === editFormData.customerId) || null}
-                                                    onChange={(_, newValue) => setEditFormData({ ...editFormData, customerId: newValue?._id || '' })}
-                                                    renderInput={(params) => <TextField {...params} label="Customer" fullWidth size="small" />}
-                                                />
-                                            )}
-                                        </Grid>
-
-                                        <Grid size={{ xs: 12 }}>
-                                            <Autocomplete
-                                                options={foodItems}
-                                                getOptionLabel={(option) => `${option.name} (${option.price} ETB)`}
-                                                value={foodItems.find(f => f.code === editFormData.foodItemCode) || null}
-                                                onChange={(_, newValue) => setEditFormData({ ...editFormData, foodItemCode: newValue?.code || '' })}
-                                                renderInput={(params) => <TextField {...params} label="Food Item" fullWidth size="small" />}
-                                            />
-                                        </Grid>
-
-                                        <Grid size={{ xs: 12 }}>
-                                            <TextField
-                                                label="Notes"
-                                                value={editFormData.notes}
-                                                onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
-                                                fullWidth
-                                                multiline
-                                                rows={2}
-                                                size="small"
-                                            />
-                                        </Grid>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Grid size={{ xs: 12, sm: 6 }}>
-                                            <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 'bold' }}>Customer Details</Typography>
-                                            <Typography variant="h6" sx={{ mt: 0.5 }}>{selectedOrder.isGuest ? (selectedOrder.guestName || 'Guest') : selectedOrder.customer.name}</Typography>
-                                            <Typography variant="body2" color="text.secondary">{selectedOrder.isGuest ? 'Guest' : selectedOrder.customer.department}</Typography>
-                                        </Grid>
-
-                                        <Grid size={{ xs: 12, sm: 6 }}>
-                                            <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 'bold' }}>Meal Information</Typography>
-                                            <Typography variant="h6" sx={{ mt: 0.5 }}>{selectedOrder.foodItem?.name || 'N/A'}</Typography>
-                                            <Typography variant="body2" color="text.secondary">Code: {selectedOrder.workCode}</Typography>
-                                        </Grid>
-
-                                        <Grid size={{ xs: 12 }}>
-                                            <Divider sx={{ my: 1 }} />
-                                            <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 'bold' }}>Cost Breakdown</Typography>
-                                            <Box sx={{ mt: 1, p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                                    <Typography variant="body2">Meal Price:</Typography>
-                                                    <Typography variant="body2">{selectedOrder.currency} {selectedOrder.price.toFixed(2)}</Typography>
-                                                </Box>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <Typography variant="body2">Applied Subsidy:</Typography>
-                                                    <Typography variant="body2" color="success.main">-{selectedOrder.currency} {selectedOrder.subsidy.toFixed(2)}</Typography>
-                                                </Box>
-                                                <Divider sx={{ my: 1.5 }} />
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <Typography variant="subtitle1" fontWeight="bold">Balance to Pay:</Typography>
-                                                    <Typography variant="subtitle1" fontWeight="900" color="primary.main">
-                                                        {selectedOrder.currency} {(selectedOrder.price - selectedOrder.subsidy).toFixed(2)}
-                                                    </Typography>
-                                                </Box>
-                                            </Box>
-                                        </Grid>
-
-                                        {selectedOrder.notes && (
-                                            <Grid size={{ xs: 12 }}>
-                                                <Divider sx={{ my: 1 }} />
-                                                <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 'bold' }}>Notes</Typography>
-                                                <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'background.default' }}>
-                                                    <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
-                                                        "{selectedOrder.notes}"
-                                                    </Typography>
-                                                </Paper>
-                                            </Grid>
-                                        )}
-                                    </>
-                                )}
-                                <Grid size={{ xs: 12 }}>
-                                    <Typography variant="caption" color="text.secondary" display="block">
-                                        Timestamp: {new Date(selectedOrder.timestamp).toLocaleString()}
-                                    </Typography>
-                                </Grid>
-                            </Grid>
-                        </DialogContent>
-
-                        <DialogActions sx={{ p: 3, bgcolor: 'background.default', gap: 1 }}>
-                            {isEditing ? (
-                                <>
-                                    <Button
-                                        variant="outlined"
-                                        color="inherit"
-                                        onClick={() => setIsEditing(false)}
-                                        disabled={editLoading}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        variant="contained"
-                                        color="primary"
-                                        onClick={handleUpdateOrder}
-                                        disabled={editLoading}
-                                        startIcon={editLoading ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                                    >
-                                        Save Changes
-                                    </Button>
-                                </>
-                            ) : (
-                                <>
-                                    {selectedOrder.status === 'pending' && (
-                                        <>
-                                            <Button
-                                                variant="outlined"
-                                                color="primary"
-                                                onClick={handleEnterEditMode}
-                                                startIcon={<EditIcon />}
-                                                sx={{ borderRadius: 2, mr: 'auto' }}
-                                            >
-                                                Edit
-                                            </Button>
-                                            <Button
-                                                variant="contained"
-                                                color="success"
-                                                onClick={handleApprove}
-                                                disabled={actionLoading}
-                                                startIcon={actionLoading ? <CircularProgress size={20} color="inherit" /> : <ApproveIcon />}
-                                                sx={{ borderRadius: 2, px: 3 }}
-                                            >
-                                                Approve
-                                            </Button>
-                                            <Button
-                                                variant="outlined"
-                                                color="error"
-                                                onClick={handleReject}
-                                                disabled={actionLoading}
-                                                startIcon={actionLoading ? <CircularProgress size={20} color="inherit" /> : <RejectIcon />}
-                                                sx={{ borderRadius: 2, px: 3 }}
-                                            >
-                                                Reject
-                                            </Button>
-                                        </>
-                                    )}
-                                    <Button variant="text" color="inherit" onClick={() => setSelectedOrder(null)} sx={{ borderRadius: 2 }}>
-                                        Close
-                                    </Button>
-                                </>
-                            )}
-                        </DialogActions>
-                    </>
-                )}
+                <DialogTitle sx={{ fontWeight: 'bold' }}>Confirm Approval</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Are you sure you want to approve this order for <strong>{selectedOrder?.isGuest ? selectedOrder?.guestName : selectedOrder?.customer?.name}</strong>?
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions sx={{ p: 3, gap: 1 }}>
+                    <Button
+                        variant="text"
+                        color="inherit"
+                        onClick={() => setConfirmApproveOpen(false)}
+                        sx={{ borderRadius: 2 }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleApprove}
+                        variant="contained"
+                        color="success"
+                        disabled={actionLoading}
+                        startIcon={actionLoading ? <CircularProgress size={20} color="inherit" /> : <ApproveIcon />}
+                        sx={{ borderRadius: 2, px: 3 }}
+                        autoFocus
+                    >
+                        Approve
+                    </Button>
+                </DialogActions>
             </Dialog>
 
-            {/* Reject Confirmation Dialog */}
             <Dialog
                 open={confirmRejectOpen}
                 onClose={() => setConfirmRejectOpen(false)}
@@ -604,10 +845,10 @@ const Dashboard: React.FC = () => {
             >
                 <DialogTitle sx={{ fontWeight: 'bold' }}>Reject Order?</DialogTitle>
                 <DialogContent>
-                    <Typography>
+                    <DialogContentText>
                         Are you sure you want to reject this order for <strong>{selectedOrder?.customer?.name}</strong>?
                         This action cannot be undone.
-                    </Typography>
+                    </DialogContentText>
                 </DialogContent>
                 <DialogActions sx={{ p: 3, gap: 1 }}>
                     <Button
@@ -623,12 +864,26 @@ const Dashboard: React.FC = () => {
                         color="error"
                         onClick={handleRejectConfirm}
                         sx={{ borderRadius: 2, px: 3 }}
+                        disabled={actionLoading}
+                        startIcon={actionLoading ? <CircularProgress size={20} color="inherit" /> : <RejectIcon />}
                         autoFocus
                     >
                         Yes, Reject
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Notification Snackbar */}
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={4000}
+                onClose={() => setSnackbar({ ...snackbar, open: false })}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            >
+                <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })} variant="filled">
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };
