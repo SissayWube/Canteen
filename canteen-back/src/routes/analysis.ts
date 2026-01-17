@@ -46,15 +46,7 @@ router.get('/', async (req: Request, res: Response) => {
         }
 
         const { status, itemCode } = req.query;
-        if (status) {
-            match.status = status;
-        }
-
-        if (itemCode) {
-            match.workCode = itemCode;
-        }
-
-        let groupBy;
+        let groupBy: any;
         switch (type) {
             case 'department':
                 groupBy = '$customer.department';
@@ -73,6 +65,13 @@ router.get('/', async (req: Request, res: Response) => {
                 break;
             default:
                 groupBy = 'orders';
+        }
+
+        if (status) {
+            match.status = status;
+        } else if (groupBy !== 'orders') {
+            // For summaries/totals, default to approved only if no status is specified
+            match.status = 'approved';
         }
 
         let aggregation;
@@ -144,9 +143,9 @@ router.get('/totals', async (req: Request, res: Response) => {
     try {
         const { from, to, department, customerId, itemCode } = req.query;
 
-        const match: any = {};
-        if (from) match.timestamp = { $gte: new Date(from as string) };
-        if (to) match.timestamp = { $lte: new Date(to as string) };
+        const match: any = { status: 'approved' }; // Always filter by approved for totals
+        if (from) match.timestamp = { ...match.timestamp, $gte: new Date(from as string) };
+        if (to) match.timestamp = { ...match.timestamp, $lte: new Date(to as string) };
         if (customerId) match.customer = new mongoose.Types.ObjectId(customerId as string);
         if (itemCode) match.workCode = itemCode as string;
 
@@ -179,9 +178,9 @@ router.get('/grouped', async (req: Request, res: Response) => {
     try {
         const { groupBy = 'department', from, to } = req.query;
 
-        const match: any = {};
-        if (from) match.timestamp = { $gte: new Date(from as string) };
-        if (to) match.timestamp = { $lte: new Date(to as string) };
+        const match: any = { status: 'approved' }; // Always filter by approved for grouped summaries
+        if (from) match.timestamp = { ...match.timestamp, $gte: new Date(from as string) };
+        if (to) match.timestamp = { ...match.timestamp, $lte: new Date(to as string) };
 
         let groupField: any;
         switch (groupBy) {

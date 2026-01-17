@@ -50,7 +50,7 @@ const Analysis: React.FC = () => {
     const [departments, setDepartments] = useState<string[]>([]);
     const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
     const [selectedFoodItem, setSelectedFoodItem] = useState<FoodItem | null>(null);
-    const [selectedStatus, setSelectedStatus] = useState<string>('');
+    const [selectedStatus, setSelectedStatus] = useState<string>('approved');
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [selectedOrderDetails, setSelectedOrderDetails] = useState<OrderRow | null>(null);
     // State for row selection (MUI v8+ uses { type, ids })
@@ -75,9 +75,11 @@ const Analysis: React.FC = () => {
         enabled: !!(from && to), // Only fetch when date range is set
     });
 
-    const totalMeals = data.length;
-    const totalAmount = data.reduce((acc, curr) => acc + (curr.price || 0), 0);
-    const totalSubsidy = data.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
+    const approvedData = useMemo(() => data.filter(r => (r.status || 'approved').toLowerCase() === 'approved'), [data]);
+
+    const totalMeals = approvedData.length;
+    const totalAmount = approvedData.reduce((acc, curr) => acc + (curr.price || 0), 0);
+    const totalSubsidy = approvedData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
 
 
     useEffect(() => {
@@ -246,15 +248,16 @@ const Analysis: React.FC = () => {
                 headStyles: { fillColor: [220, 220, 220], textColor: 20, fontStyle: 'bold' }
             });
 
-            // --- Summary ---
+            // --- Summary (Only Approved) ---
             const finalY = (doc as any).lastAutoTable?.finalY || 60;
-            const summaryTotalMeals = exportData.length;
-            const summaryTotalAmount = exportData.reduce((acc, curr) => acc + (curr.price || 0), 0);
-            const summaryTotalSubsidy = exportData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
+            const approvedExportData = exportData.filter(r => (r.status || 'approved').toLowerCase() === 'approved');
+            const summaryTotalMeals = approvedExportData.length;
+            const summaryTotalAmount = approvedExportData.reduce((acc, curr) => acc + (curr.price || 0), 0);
+            const summaryTotalSubsidy = approvedExportData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
 
-            doc.text(`Total Meals: ${summaryTotalMeals}`, 14, finalY + 10);
-            doc.text(`Total Amount: ${summaryTotalAmount.toLocaleString()} ETB`, 14, finalY + 16);
-            doc.text(`Total Subsidy: ${summaryTotalSubsidy.toLocaleString()} ETB`, 14, finalY + 22);
+            doc.text(`Total Meals (Approved): ${summaryTotalMeals}`, 14, finalY + 10);
+            doc.text(`Total Amount (Approved): ${summaryTotalAmount.toLocaleString()} ETB`, 14, finalY + 16);
+            doc.text(`Total Subsidy (Approved): ${summaryTotalSubsidy.toLocaleString()} ETB`, 14, finalY + 22);
 
             // --- Footer ---
             const pageHeight = doc.internal.pageSize.height;
@@ -309,13 +312,14 @@ const Analysis: React.FC = () => {
                 ]);
             });
 
-            // Summary
-            const totalMealsCalc = exportData.length;
-            const totalAmountCalc = exportData.reduce((acc, curr) => acc + (curr.price || 0), 0);
-            const totalSubsidyCalc = exportData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
+            // Summary (Only Approved)
+            const approvedExcelData = exportData.filter(r => (r.status || 'approved').toLowerCase() === 'approved');
+            const totalMealsCalc = approvedExcelData.length;
+            const totalAmountCalc = approvedExcelData.reduce((acc, curr) => acc + (curr.price || 0), 0);
+            const totalSubsidyCalc = approvedExcelData.reduce((acc, curr) => acc + (curr.subsidy || 0), 0);
 
             ws_data.push([]);
-            ws_data.push(['SUMMARY']);
+            ws_data.push(['SUMMARY (APPROVED ONLY)']);
             ws_data.push(['Total Meals', totalMealsCalc]);
             ws_data.push(['Total Amount', `${totalAmountCalc} ETB`]);
             ws_data.push(['Total Subsidy', `${totalSubsidyCalc} ETB`]);
@@ -453,6 +457,16 @@ const Analysis: React.FC = () => {
                         .MuiDataGrid-root { border: none !important; }
                         .MuiDataGrid-footerContainer, .MuiDataGrid-toolbarContainer { display: none !important; }
                         .MuiDataGrid-virtualScroller { overflow: visible !important; }
+
+                        /* Hide Unnecessary Columns for Print */
+                        .MuiDataGrid-columnHeader[data-field="notes"],
+                        .MuiDataGrid-cell[data-field="notes"],
+                        .MuiDataGrid-columnHeader[data-field="status"],
+                        .MuiDataGrid-cell[data-field="status"],
+                        .MuiDataGrid-columnHeader[data-field="__check__"],
+                        .MuiDataGrid-cell[data-field="__check__"] {
+                            display: none !important;
+                        }
                     }
                 `}
             </style>
@@ -686,8 +700,11 @@ const Analysis: React.FC = () => {
                     <DataGrid
                         rows={data}
                         density="compact"
-                        autoHeight={false} // Default false, overridden by CSS if needed, but for print we usually want autoHeight. Let's rely on print media query to possibly force height auto if MUI supports it, or simple hack.
-                        sx={{ '@media print': { height: 'auto', '& .MuiDataGrid-virtualScroller': { overflow: 'visible' } } }}
+                        autoHeight={false}
+                        sx={{
+                            '@media print': { height: 'auto', '& .MuiDataGrid-virtualScroller': { overflow: 'visible' } },
+                            '& .MuiDataGrid-footerContainer': { borderTop: 'none' } // Clean up double border with CustomFooter
+                        }}
                         columns={analysisColumns}
                         getRowId={(row) => row._id}
                         onRowClick={(params) => {
@@ -700,6 +717,12 @@ const Analysis: React.FC = () => {
                         }}
                         rowSelectionModel={selectedRows}
                         disableRowSelectionOnClick
+                        initialState={{
+                            pagination: {
+                                paginationModel: { pageSize: 25, page: 0 },
+                            },
+                        }}
+                        pageSizeOptions={[10, 25, 50, 100]}
                         slots={{
                             toolbar: GridToolbar,
                             footer: CustomFooter

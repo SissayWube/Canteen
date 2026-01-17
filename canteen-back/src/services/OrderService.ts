@@ -38,7 +38,7 @@ class OrderService {
         const mealsToday = await Order.countDocuments({
             customer: customerId,
             timestamp: { $gte: today },
-            status: { $ne: 'rejected' } // Count all non-rejected attempts (pending + approved)
+            status: 'approved' // Only count approved orders
         });
 
         if (mealsToday >= dailyLimit) {
@@ -303,7 +303,7 @@ class OrderService {
         if (order.isGuest) {
             if (guestName !== undefined) order.guestName = guestName.trim();
             // If switching to guest, clear customer link
-            order.customer = undefined;
+            (order as any).customer = undefined;
         } else {
             if (customerId) {
                 if (!mongoose.Types.ObjectId.isValid(customerId)) {
@@ -319,8 +319,8 @@ class OrderService {
                     throw new AppError('Active customer not found', 404);
                 }
 
-                order.customer = customer._id;
-                order.guestName = undefined;
+                order.customer = customer._id as any;
+                (order as any).guestName = undefined;
             }
         }
 

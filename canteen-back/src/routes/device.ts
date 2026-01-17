@@ -35,7 +35,7 @@ router.post('/', async (req: Request, res: Response) => {
 
         const mealsToday = await Order.countDocuments({
             customer: customer._id,
-            status: { $ne: 'rejected' }, // Count pending + approved to prevent queueing
+            status: 'approved', // Only count approved orders
             timestamp: { $gte: today },
         });
 
