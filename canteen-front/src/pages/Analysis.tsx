@@ -52,8 +52,8 @@ function CustomFooter(props: any) {
 }
 
 const Analysis: React.FC = () => {
-    const [from, setFrom] = useState<Dayjs | null>(null);
-    const [to, setTo] = useState<Dayjs | null>(null);
+    const [from, setFrom] = useState<Dayjs | null>(dayjs());
+    const [to, setTo] = useState<Dayjs | null>(dayjs());
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [selectedDepartment, setSelectedDepartment] = useState('');
     const [customers, setCustomers] = useState<Customer[]>([]);
@@ -488,21 +488,35 @@ const Analysis: React.FC = () => {
                         
                         /* Show Print Content */
                         .print-content { display: block !important; }
+                        .print-table { display: table !important; width: 100% !important; border-collapse: collapse !important; }
                         
                         /* Layout Adjustments */
-                        .MuiDataGrid-root { border: none !important; }
-                        .MuiDataGrid-footerContainer { display: flex !important; border-top: 1px solid black !important; }
+                        .MuiDataGrid-root, .grid-container { display: none !important; }
+                        .MuiDataGrid-footerContainer { display: none !important; }
                         .MuiTablePagination-root, .MuiDataGrid-toolbarContainer { display: none !important; }
-                        .MuiDataGrid-virtualScroller { overflow: visible !important; }
+                        .MuiDataGrid-virtualScroller { display: none !important; }
 
-                        /* Hide Unnecessary Columns for Print */
-                        .MuiDataGrid-columnHeader[data-field="notes"],
-                        .MuiDataGrid-cell[data-field="notes"],
-                        .MuiDataGrid-columnHeader[data-field="status"],
-                        .MuiDataGrid-cell[data-field="status"],
-                        .MuiDataGrid-columnHeader[data-field="__check__"],
-                        .MuiDataGrid-cell[data-field="__check__"] {
-                            display: none !important;
+                        .print-table th, .print-table td {
+                            border: 1px solid black !important;
+                            padding: 4px 8px !important;
+                            text-align: left !important;
+                            font-size: 10pt !important;
+                        }
+                        .nowrap { white-space: nowrap !important; }
+                        .print-table th {
+                            background-color: #eee !important;
+                            font-weight: bold !important;
+                        }
+                        .text-right { text-align: right !important; }
+                        
+                        .sticky-footer {
+                            position: fixed !important;
+                            bottom: 0 !important;
+                            left: 0 !important;
+                            right: 0 !important;
+                            width: 100% !important;
+                            background: white !important;
+                            z-index: 1000 !important;
                         }
                     }
                 `}
@@ -568,12 +582,6 @@ const Analysis: React.FC = () => {
                 </Box>
             </Box>
 
-            {/* Print Footer (Fixed Bottom) */}
-            <Box className="print-content" sx={{ display: 'none', position: 'fixed', bottom: 0, left: 0, width: '100%', textAlign: 'center' }}>
-                <div style={{ borderTop: '2px solid black', margin: '0 20px 10px 20px', paddingTop: '5px', fontFamily: 'serif', fontWeight: 'bold', fontSize: '12px' }}>
-                    PLEASE MAKE SURE THAT THIS IS THE CORRECT ISSUE BEFORE USE
-                </div>
-            </Box>
 
             <Box className="no-print" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h4">Orders Analysis</Typography>
@@ -715,12 +723,12 @@ const Analysis: React.FC = () => {
                 <Button
                     variant="outlined"
                     onClick={() => {
-                        setFrom(null);
-                        setTo(null);
+                        setFrom(dayjs());
+                        setTo(dayjs());
                         setSelectedCustomer(null);
                         setSelectedDepartment('');
                         setSelectedFoodItem(null);
-                        setSelectedStatus('');
+                        setSelectedStatus('approved');
                         setSelectedRows({ type: 'include', ids: new Set() });
                     }}
                     size="small"
@@ -734,7 +742,7 @@ const Analysis: React.FC = () => {
             {isLoading ? (
                 <TableSkeleton rows={10} />
             ) : (
-                <Paper className="print-content" sx={{ height: 600, width: '100%', '@media print': { height: 'auto', boxShadow: 'none' } }}>
+                <Box className="grid-container" sx={{ height: 600, width: '100%' }}>
                     <DataGrid
                         rows={data}
                         density="compact"
@@ -776,34 +784,58 @@ const Analysis: React.FC = () => {
                             } as any
                         }}
                     />
-                    {/* Printed Summary (Visible only in print) */}
-                    <Box sx={{
-                        display: 'none',
-                        mt: 4,
-                        p: 2,
-                        border: '1px solid black',
-                        '@media print': { display: 'block' }
-                    }}>
-                        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, textDecoration: 'underline' }}>
-                            Report Summary ({selectedStatus ? selectedStatus.toUpperCase() : 'ALL STATUSES'})
-                        </Typography>
-                        <Grid container spacing={2}>
-                            <Grid size={3}>
-                                <Typography variant="body1"><strong>Total Meals:</strong> {totalMeals}</Typography>
-                            </Grid>
-                            <Grid size={3}>
-                                <Typography variant="body1"><strong>Total Amount:</strong> {totalAmount.toLocaleString()} ETB</Typography>
-                            </Grid>
-                            <Grid size={3}>
-                                <Typography variant="body1"><strong>Total Subsidy:</strong> {totalSubsidy.toLocaleString()} ETB</Typography>
-                            </Grid>
-                            <Grid size={3}>
-                                <Typography variant="body1"><strong>Total To Pay:</strong> {(totalAmount - totalSubsidy).toLocaleString()} ETB</Typography>
-                            </Grid>
-                        </Grid>
-                    </Box>
-                </Paper>
+                </Box>
             )}
+
+            {/* Hidden HTML Table for Printing (All Pages) */}
+            <table className="print-table" style={{ display: 'none', width: '100%', marginTop: '20px' }}>
+                <thead>
+                    <tr>
+                        <th className="nowrap">Date</th>
+                        <th>Customer</th>
+                        <th>Department</th>
+                        <th>Item</th>
+                        <th>Operator</th>
+                        <th className="text-right">Price (ETB)</th>
+                        <th className="text-right">Subsidy (ETB)</th>
+                        <th className="text-right">To Pay (ETB)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {data.map((row) => (
+                        <tr key={row._id}>
+                            <td className="nowrap">{dayjs(row.timestamp).format('DD/MM/YYYY HH:mm')}</td>
+                            <td>{row.isGuest ? (row.guestName || 'Guest') : (row.customer?.name || 'Unknown')}</td>
+                            <td>{row.isGuest ? 'Visitor' : (row.customer?.department || 'Unknown')}</td>
+                            <td>{row.foodItem?.name || 'Unknown'}</td>
+                            <td>{row.operator?.username || 'N/A'}</td>
+                            <td className="text-right">{(row.price || 0).toLocaleString()}</td>
+                            <td className="text-right">{(row.subsidy || 0).toLocaleString()}</td>
+                            <td className="text-right">{((row.price || 0) - (row.subsidy || 0)).toLocaleString()}</td>
+                        </tr>
+                    ))}
+                    {/* Summary Row at the end of tbody to avoid redundancy across pages */}
+                    <tr style={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>
+                        <td colSpan={4}>Totals</td>
+                        <td className="text-right">{totalMeals} Meals</td>
+                        <td className="text-right">{totalAmount.toLocaleString()} ETB</td>
+                        <td className="text-right">{totalSubsidy.toLocaleString()} ETB</td>
+                        <td className="text-right">{(totalAmount - totalSubsidy).toLocaleString()} ETB</td>
+                    </tr>
+                </tbody>
+                <tfoot style={{ display: 'table-footer-group' }}>
+                    <tr style={{ border: 'none' }}>
+                        <td colSpan={8} style={{ border: 'none', height: '60px' }}></td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            {/* Print Footer (Restored Outside Table) */}
+            <Box className="print-content sticky-footer" sx={{ display: 'none', width: '100%', textAlign: 'center' }}>
+                <div style={{ borderTop: '2px solid black', margin: '0 20px 10px 20px', paddingTop: '10px', fontFamily: 'serif', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase' }}>
+                    PLEASE MAKE SURE THAT THIS IS THE CORRECT ISSUE BEFORE USE
+                </div>
+            </Box>
 
             <Dialog
                 open={detailsOpen}

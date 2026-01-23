@@ -72,8 +72,9 @@ const ManualIssue: React.FC = () => {
             });
             setMessage({ type: 'success', text: data.message });
 
-            // Invalidate orders cache so Dashboard refreshes
+            // Invalidate orders and analysis cache so views refresh
             queryClient.invalidateQueries({ queryKey: ['orders'] });
+            queryClient.invalidateQueries({ queryKey: ['analysis'] });
 
             // Reset fields
             setSelectedCustomerId('');
@@ -317,7 +318,7 @@ const ManualIssue: React.FC = () => {
                                         {isGuest ? 'GUEST' : (selectedCustomer ? selectedCustomer.deviceId : '-------')}
                                     </Typography>
                                 </Box>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0 }}>
                                     <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>DEPT:</Typography>
                                     <Typography variant="body2" sx={{ fontWeight: 'medium', fontSize: '0.8rem' }}>
                                         {isGuest ? 'VISITOR' : (selectedCustomer ? selectedCustomer.department : '----------------')}

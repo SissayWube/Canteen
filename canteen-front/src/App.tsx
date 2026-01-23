@@ -15,6 +15,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import Users from './pages/Users';
 import NotFound from './pages/NotFound';
 import ErrorBoundary from './components/ErrorBoundary';
+import GlobalSocketHandler from './components/GlobalSocketHandler';
 
 const theme = createTheme({
   palette: {
@@ -26,6 +27,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+      <GlobalSocketHandler />
       <LocalizationProvider dateAdapter={AdapterDayjs}>
         <AuthProvider>
           <Router>
