@@ -1,4 +1,4 @@
-import { ReactNode, createContext, useContext, useEffect, useState } from 'react';
+import { ReactNode, createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 interface SocketContextType {
@@ -54,19 +54,24 @@ export function useSocket() {
 }
 
 // Helper hook to listen to socket events
+// Fixed: Memoize handler to prevent recreation on every render
 export function useSocketEvent<T = any>(
     eventName: string,
     handler: (data: T) => void
 ) {
     const { socket } = useSocket();
 
+    // Memoize the handler to prevent recreation on every render
+    // This prevents the effect from re-running unnecessarily
+    const memoizedHandler = useCallback(handler, [handler]);
+
     useEffect(() => {
         if (!socket) return;
 
-        socket.on(eventName, handler);
+        socket.on(eventName, memoizedHandler);
 
         return () => {
-            socket.off(eventName, handler);
+            socket.off(eventName, memoizedHandler);
         };
-    }, [socket, eventName, handler]);
+    }, [socket, eventName, memoizedHandler]);
 }

@@ -5,6 +5,8 @@ import FoodItem from '../models/FoodItem';
 import Settings from '../models/Settings';
 import { AppError } from '../middleware/errorHandler';
 import logger from '../config/logger';
+import { PopulatedOrder } from '../types/populated';
+import { PAGINATION, ALERTS_CONFIG, DEFAULTS } from '../constants';
 
 export interface CreateManualOrderData {
     customerId?: string;
@@ -183,8 +185,8 @@ class OrderService {
      */
     async approveOrder(orderId: string, operatorId: string, operatorUsername?: string) {
         const order = await Order.findById(orderId)
-            .populate('customer', 'name deviceId')
-            .populate('foodItem', 'name');
+            .populate('customer', 'name deviceId department isActive')
+            .populate('foodItem', 'name code price subsidy currency isActive') as PopulatedOrder | null;
 
         if (!order) {
             throw new AppError('Order not found', 404);
@@ -196,7 +198,7 @@ class OrderService {
 
         // Check daily limit (Approved count only) before approving
         if (order.customer) {
-            const settings = await Settings.findOne() || { dailyMealLimit: 3 };
+            const settings = await Settings.findOne() || { dailyMealLimit: ALERTS_CONFIG.DAILY_MEAL_LIMIT };
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
@@ -215,14 +217,14 @@ class OrderService {
         }
 
         order.status = 'approved';
-        order.operator = new mongoose.Types.ObjectId(operatorId);
+        order.operator = operatorId as any; // Cast needed as operator can be ObjectId or populated
         await order.save();
 
         const settings = await Settings.findOne() || { companyName: 'Company Canteen' };
 
         logger.info('Order approved', {
             orderId: order._id,
-            customer: (order.customer as any)?.name,
+            customer: order.customer?.name,
             operator: operatorUsername,
         });
 
@@ -230,9 +232,9 @@ class OrderService {
             order,
             ticketData: {
                 companyName: settings.companyName,
-                customerName: (order.customer as any).name,
-                customerId: (order.customer as any).deviceId,
-                mealName: (order.foodItem as any).name,
+                customerName: order.customer.name,
+                customerId: order.customer.deviceId,
+                mealName: order.foodItem.name,
                 timestamp: order.timestamp,
                 orderId: order._id.toString().slice(-8),
                 operatorName: operatorUsername,
@@ -303,7 +305,7 @@ class OrderService {
         if (order.isGuest) {
             if (guestName !== undefined) order.guestName = guestName.trim();
             // If switching to guest, clear customer link
-            (order as any).customer = undefined;
+            order.customer = undefined as any;
         } else {
             if (customerId) {
                 if (!mongoose.Types.ObjectId.isValid(customerId)) {
@@ -320,7 +322,7 @@ class OrderService {
                 }
 
                 order.customer = customer._id as any;
-                (order as any).guestName = undefined;
+                order.guestName = '';
             }
         }
 
@@ -372,8 +374,8 @@ class OrderService {
      */
     async getOrders(filters: OrderFilters) {
         const {
-            page = 1,
-            limit = 20,
+            page = PAGINATION.DEFAULT_PAGE,
+            limit = PAGINATION.DEFAULT_LIMIT,
             from,
             to,
             customerId,
@@ -401,15 +403,39 @@ class OrderService {
 
         query.timestamp = { $gte: rangeStart, $lte: rangeEnd };
 
+        // Pagination calculation (moved up to avoid using undefined variables)
+        const pageNum = Math.max(1, page);
+        const limitNum = Math.max(1, Math.min(PAGINATION.MAX_LIMIT, limit));
+        const skip = (pageNum - 1) * limitNum;
+
         // 1. Department/Guest Filter
         if (department === 'Visitor') {
             query.isGuest = true;
         } else if (department && department.trim() !== '' && department !== 'All Departments') {
+            // Optimized: Use lean() to reduce memory footprint and only select _id field
             const customersInDept = await Customer.find({
                 department: { $regex: new RegExp(`^${department.trim()}$`, 'i') },
-            }).select('_id');
-            query.customer = { $in: customersInDept.map(c => c._id) };
-            query.isGuest = { $ne: true };
+            }).select('_id').lean();
+
+            if (customersInDept.length > 0) {
+                query.customer = { $in: customersInDept.map(c => c._id) };
+                query.isGuest = { $ne: true };
+            } else {
+                // No customers in this department - return early optimization
+                return {
+                    orders: [],
+                    dateRange: {
+                        from: rangeStart.toISOString().split('T')[0],
+                        to: rangeEnd.toISOString().split('T')[0],
+                    },
+                    pagination: {
+                        page: pageNum,
+                        limit: limitNum,
+                        total: 0,
+                        pages: 0,
+                    },
+                };
+            }
         }
 
         // 2. Customer Filter
@@ -421,9 +447,10 @@ class OrderService {
         // 3. Name search (matches both regular customers and guests)
         if (search && search.trim() !== '') {
             const term = search.trim();
+            // Optimized: Use lean() to reduce memory footprint
             const matchingCustomers = await Customer.find({
                 name: { $regex: term, $options: 'i' },
-            }).select('_id');
+            }).select('_id').lean();
 
             query.$or = [
                 { customer: { $in: matchingCustomers.map(c => c._id) } },
@@ -435,11 +462,6 @@ class OrderService {
         if (status && ['pending', 'approved', 'rejected'].includes(status)) {
             query.status = status;
         }
-
-        // Pagination
-        const pageNum = Math.max(1, page);
-        const limitNum = Math.max(1, Math.min(100, limit));
-        const skip = (pageNum - 1) * limitNum;
 
         // Execute query
         const orders = await Order.find(query)

@@ -11,10 +11,11 @@ export interface IFoodItem extends Document {
     availableDays?: string[]; // e.g., ['Monday', 'Tuesday', ...] or leave empty for all days
     createdAt: Date;
     updatedAt: Date;
+    deletedAt?: Date;
 }
 
 const foodItemSchema: Schema<IFoodItem> = new Schema({
-    code: { type: String, required: true, unique: true, trim: true },
+    code: { type: String, required: true, trim: true }, // Unique index defined below
     name: { type: String, required: true },
     description: String,
     price: { type: Number, required: true, min: 0 },
@@ -22,10 +23,21 @@ const foodItemSchema: Schema<IFoodItem> = new Schema({
     currency: { type: String, default: 'ETB' },
     isActive: { type: Boolean, default: true },
     availableDays: [String], // e.g., ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    deletedAt: { type: Date, default: null },
 }, {
     timestamps: true, // Automatically adds createdAt and updatedAt
 });
 
+// Soft delete middleware
+foodItemSchema.pre(/^find/, function (this: mongoose.Query<any, any>) {
+    const query = this.getQuery();
+    if (query.deletedAt === undefined) {
+        this.where({ deletedAt: null });
+    }
+});
+
+// Unique index only for non-deleted items
+foodItemSchema.index({ code: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } });
 // Index for faster lookups by code (most common query from device)
 foodItemSchema.index({ code: 1, isActive: 1 });
 

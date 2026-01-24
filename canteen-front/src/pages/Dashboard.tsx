@@ -27,7 +27,7 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { ordersApi, Order, OrderFilters } from '../api/orders';
+import { ordersApi, Order, OrderFilters as OrderFiltersType } from '../api/orders';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSocketEvent } from '../contexts/SocketContext';
 import {
@@ -36,16 +36,17 @@ import {
     CheckCircle as ApproveIcon,
     Cancel as RejectIcon,
     FilterList as FilterIcon,
-    Comment as CommentIcon
+    Comment as CommentIcon,
+    Edit as EditIcon,
+    Save as SaveIcon
 } from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import Tooltip from '@mui/material/Tooltip';
 import dayjs, { Dayjs } from 'dayjs';
 import { HighlightedTableRow } from '../components/HighlightedTableRow';
+import OrderFilters from '../components/OrderFilters';
 import { customersApi, Customer } from '../api/customers';
 import { foodItemsApi, FoodItem } from '../api/foodItems';
 import { Autocomplete, TextField } from '@mui/material';
-import { Edit as EditIcon, Save as SaveIcon } from '@mui/icons-material';
 import TableSkeleton from '../components/TableSkeleton';
 
 interface OrderDetailsModalProps {
@@ -374,7 +375,7 @@ const Dashboard: React.FC = () => {
     }, []);
 
     // Build filters
-    const filters: OrderFilters = {
+    const filters: OrderFiltersType = {
         page: page + 1,
         limit: rowsPerPage,
         customerId: selectedCustomerId || undefined,
@@ -525,119 +526,41 @@ const Dashboard: React.FC = () => {
             </Grid>
 
             <Paper sx={{ p: 1.5, mb: 2 }}>
-                <Grid container spacing={1.5} alignItems="center">
-                    <Grid size={{ xs: 12, sm: 3, md: 2 }}>
-                        <TextField
-                            fullWidth
-                            label="Search Name"
-                            placeholder="Employee/Guest..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            size="small"
-                        />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 3, md: 1.5 }}>
-                        <DatePicker
-                            label="From"
-                            value={fromDate}
-                            onChange={(newValue) => setFromDate(newValue)}
-                            maxDate={toDate || undefined}
-                            slotProps={{ textField: { fullWidth: true, size: 'small' } }}
-                        />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 3, md: 1.5 }}>
-                        <DatePicker
-                            label="To"
-                            value={toDate}
-                            onChange={(newValue) => setToDate(newValue)}
-                            minDate={fromDate || undefined}
-                            slotProps={{ textField: { fullWidth: true, size: 'small' } }}
-                        />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 3, md: 1.5 }}>
-                        <TextField
-                            select
-                            fullWidth
-                            label="Status"
-                            value={selectedStatus || 'all'}
-                            onChange={(e) => {
-                                setSelectedStatus(e.target.value === 'all' ? '' : e.target.value);
-                                setPage(0);
-                            }}
-                            size="small"
-                        >
-                            <MenuItem value="all">All Statuses</MenuItem>
-                            <MenuItem value="approved">Approved</MenuItem>
-                            <MenuItem value="pending">Pending</MenuItem>
-                            <MenuItem value="rejected">Rejected</MenuItem>
-                        </TextField>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 4, md: 2 }}>
-                        <Autocomplete
-                            options={filterCustomers}
-                            getOptionLabel={(option) => `${option.name} (${option.deviceId})`}
-                            value={filterCustomers.find(c => c._id === selectedCustomerId) || null}
-                            onChange={(_, newValue) => {
-                                setSelectedCustomerId(newValue?._id || '');
-                                setPage(0);
-                            }}
-                            renderInput={(params) => <TextField {...params} label="Customer" size="small" />}
-                        />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 4, md: 1.5 }}>
-                        <TextField
-                            select
-                            fullWidth
-                            label="Department"
-                            value={selectedDepartment || 'All Departments'}
-                            onChange={(e) => {
-                                setSelectedDepartment(e.target.value === 'All Departments' ? '' : e.target.value);
-                                setPage(0);
-                            }}
-                            size="small"
-                        >
-                            <MenuItem value="All Departments">All Departments</MenuItem>
-                            <MenuItem value="Visitor">Visitor (Guests)</MenuItem>
-                            {departments.map(dep => (
-                                <MenuItem key={dep} value={dep}>{dep}</MenuItem>
-                            ))}
-                        </TextField>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 4, md: 2 }} sx={{ display: 'flex', gap: 1 }}>
-                        <Button
-                            variant="outlined"
-                            fullWidth
-                            onClick={() => {
-                                setFromDate(dayjs());
-                                setToDate(dayjs());
-                                setSelectedCustomerId('');
-                                setSelectedDepartment('');
-                                setSelectedStatus('');
-                                setSearchTerm('');
-                                setPage(0);
-                            }}
-                            size="small"
-                        >
-                            Today
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            fullWidth
-                            onClick={() => {
-                                setFromDate(null);
-                                setToDate(null);
-                                setSelectedCustomerId('');
-                                setSelectedDepartment('');
-                                setSelectedStatus('');
-                                setSearchTerm('');
-                                setPage(0);
-                            }}
-                            size="small"
-                        >
-                            Reset
-                        </Button>
-                    </Grid>
-                </Grid>
+                <OrderFilters
+                    fromDate={fromDate}
+                    setFromDate={setFromDate}
+                    toDate={toDate}
+                    setToDate={setToDate}
+                    selectedStatus={selectedStatus}
+                    setSelectedStatus={(status) => {
+                        setSelectedStatus(status);
+                        setPage(0);
+                    }}
+                    selectedDepartment={selectedDepartment}
+                    setSelectedDepartment={(dept) => {
+                        setSelectedDepartment(dept);
+                        setPage(0);
+                    }}
+                    selectedCustomerId={selectedCustomerId}
+                    setSelectedCustomerId={(id) => {
+                        setSelectedCustomerId(id);
+                        setPage(0);
+                    }}
+                    searchTerm={searchTerm}
+                    setSearchTerm={setSearchTerm}
+                    customers={filterCustomers}
+                    departments={departments}
+                    onClear={() => {
+                        setFromDate(dayjs());
+                        setToDate(dayjs());
+                        setSelectedCustomerId('');
+                        setSelectedDepartment('');
+                        setSelectedStatus('');
+                        setSearchTerm('');
+                        setPage(0);
+                    }}
+                    showQuickRanges={true}
+                />
             </Paper>
 
             <Grid container spacing={3}>

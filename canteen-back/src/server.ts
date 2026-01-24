@@ -42,9 +42,14 @@ io.on('connection', (socket) => {
 // Connect to Database
 connectDB();
 
+import mongoSanitize from 'express-mongo-sanitize';
+
+// ...
+
 // Middleware
-app.use(express.json());
 app.use(cors(corsOptions));
+app.use(express.json());
+// app.use(mongoSanitize()); // Sanitize data - TEMPORARILY DISABLED DUE TO EXPRESS 5 CRASH
 
 app.use(getSessionMiddleware(mongoose));
 
