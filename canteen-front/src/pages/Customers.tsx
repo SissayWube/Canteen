@@ -15,8 +15,6 @@ import {
     CircularProgress,
     Paper,
     Grid,
-    Card,
-    CardContent,
     FormControl,
     InputLabel,
     Select,
@@ -54,7 +52,7 @@ const Customers: React.FC = () => {
     const [activeFilter, setActiveFilter] = useState<string>('all');
 
     // Statistics
-    const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, departments: 0 });
+
     const [allDepartments, setAllDepartments] = useState<string[]>([]);
 
     useEffect(() => {
@@ -78,17 +76,11 @@ const Customers: React.FC = () => {
             setCustomers(response.customers);
             setTotalCustomers(response.pagination.total);
 
-            // Calculate statistics
+            // Populate department filter
             const allCustomers = await customersApi.getAll({});
-            const active = allCustomers.customers.filter(c => c.isActive).length;
             const uniqueDepts = Array.from(new Set(allCustomers.customers.map(c => c.department).filter(Boolean))) as string[];
             setAllDepartments(uniqueDepts.sort());
-            setStats({
-                total: allCustomers.pagination.total,
-                active,
-                inactive: allCustomers.pagination.total - active,
-                departments: uniqueDepts.length,
-            });
+
         } catch (err: any) {
             setError(err?.response?.data?.error || 'Failed to fetch customers');
             showSnackbar('Failed to fetch customers', 'error');

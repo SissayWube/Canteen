@@ -22,8 +22,6 @@ import {
   CircularProgress,
   Paper,
   Grid,
-  Card,
-  CardContent,
   SelectChangeEvent,
 } from '@mui/material';
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
@@ -62,7 +60,6 @@ const FoodItems: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<string>('all');
 
   // Statistics
-  const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, avgPrice: 0 });
 
   useEffect(() => {
     fetchFoodItems();
@@ -84,18 +81,6 @@ const FoodItems: React.FC = () => {
       setFoodItems(response.foodItems);
       setTotalItems(response.pagination.total);
 
-      // Calculate statistics
-      const allItemsResponse = await foodItemsApi.getAll({ limit: 1000 });
-      const allItems = allItemsResponse.foodItems;
-      const active = allItems.filter(i => i.isActive).length;
-      const avgPrice = allItems.length > 0 ? allItems.reduce((acc, i) => acc + i.price, 0) / allItems.length : 0;
-
-      setStats({
-        total: allItems.length,
-        active,
-        inactive: allItems.length - active,
-        avgPrice,
-      });
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Failed to fetch food items');
       showSnackbar('Failed to fetch food items', 'error');

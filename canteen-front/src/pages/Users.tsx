@@ -14,8 +14,6 @@ import {
     CircularProgress,
     Paper,
     Grid,
-    Card,
-    CardContent,
     FormControl,
     InputLabel,
     Select,
@@ -53,7 +51,6 @@ const Users: React.FC = () => {
     const [activeFilter, setActiveFilter] = useState<string>('all');
 
     // Statistics
-    const [stats, setStats] = useState({ total: 0, operators: 0, admins: 0, active: 0, inactive: 0 });
 
     useEffect(() => {
         fetchUsers();
@@ -76,18 +73,6 @@ const Users: React.FC = () => {
             setUsers(response.users);
             setTotalUsers(response.pagination.total);
 
-            // Calculate statistics
-            const allUsers = await usersApi.getAll({});
-            const operators = allUsers.users.filter(u => u.role === 'operator').length;
-            const admins = allUsers.users.filter(u => u.role === 'admin').length;
-            const active = allUsers.users.filter(u => u.isActive).length;
-            setStats({
-                total: allUsers.pagination.total,
-                operators,
-                admins,
-                active,
-                inactive: allUsers.pagination.total - active,
-            });
         } catch (err: any) {
             setError(err?.response?.data?.error || 'Failed to fetch users');
             showSnackbar('Failed to fetch users', 'error');

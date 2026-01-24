@@ -36,14 +36,16 @@ const buildAnalysisMatch = async (query: any, isOrdersRoute = false) => {
     if (from || to) {
         match.timestamp = {};
         if (from) {
-            // Parse YYYY-MM-DD as local date
-            const [y, m, d] = from.split('-').map(Number);
-            match.timestamp.$gte = new Date(y, m - 1, d, 0, 0, 0, 0);
+            // Assume ISO format YYYY-MM-DD
+            const fromDate = new Date(from);
+            fromDate.setHours(0, 0, 0, 0); // Ensure start of day
+            match.timestamp.$gte = fromDate;
         }
         if (to) {
-            // Parse YYYY-MM-DD as local date
-            const [y, m, d] = to.split('-').map(Number);
-            match.timestamp.$lte = new Date(y, m - 1, d, 23, 59, 59, 999);
+            // Assume ISO format YYYY-MM-DD
+            const toDate = new Date(to);
+            toDate.setHours(23, 59, 59, 999); // Ensure end of day
+            match.timestamp.$lte = toDate;
         }
     }
 

@@ -84,11 +84,16 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE
+// DELETE (Soft Delete)
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const item = await FoodItem.findByIdAndDelete(req.params.id);
+    const item = await FoodItem.findByIdAndUpdate(
+      req.params.id,
+      { deletedAt: new Date(), isActive: false },
+      { new: true }
+    );
     if (!item) return res.status(404).json({ error: 'Food item not found' });
-    res.json({ message: 'Food item deleted' });
+    res.json({ message: 'Food item deleted successfully' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

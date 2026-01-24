@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 // Form Schema Validation
 const manualIssueSchema = z.object({
-    isGuest: z.boolean().default(false),
+    isGuest: z.boolean(),
     customerId: z.string().optional(),
     guestName: z.string().optional(),
     foodItemCode: z.string().min(1, "Please select a meal"),
@@ -49,7 +49,7 @@ const ManualIssue: React.FC = () => {
     const { user } = useAuth();
 
     // React Hook Form Setup
-    const { control, handleSubmit, watch, setValue, formState: { errors, isSubmitting }, reset } = useForm<ManualIssueFormData>({
+    const { control, handleSubmit, watch, setValue, formState: { isSubmitting }, reset } = useForm<ManualIssueFormData>({
         resolver: zodResolver(manualIssueSchema),
         defaultValues: {
             isGuest: false,
@@ -138,203 +138,203 @@ const ManualIssue: React.FC = () => {
                 {/* Form Section */}
                 <Grid size={{ xs: 12, md: 6 }}>
                     <Paper
-                        component="form"
-                        onSubmit={handleSubmit(onSubmit)}
                         sx={{ p: 4, borderRadius: 2, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}
                     >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                            <Typography variant="h6" sx={{ fontWeight: 600 }}>Issue Details</Typography>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography variant="body2" fontWeight="bold">Guest Order</Typography>
-                                <Controller
-                                    name="isGuest"
-                                    control={control}
-                                    render={({ field }) => (
-                                        <Switch
-                                            checked={field.value}
-                                            onChange={(e) => {
-                                                field.onChange(e);
-                                                // Clear unrelated fields when switching mode
-                                                if (e.target.checked) setValue('customerId', '');
-                                                else setValue('guestName', '');
-                                            }}
-                                        />
-                                    )}
-                                />
+                        <Box component="form" onSubmit={handleSubmit(onSubmit)}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                                <Typography variant="h6" sx={{ fontWeight: 600 }}>Issue Details</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Typography variant="body2" fontWeight="bold">Guest Order</Typography>
+                                    <Controller
+                                        name="isGuest"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Switch
+                                                checked={field.value}
+                                                onChange={(e) => {
+                                                    field.onChange(e);
+                                                    // Clear unrelated fields when switching mode
+                                                    if (e.target.checked) setValue('customerId', '');
+                                                    else setValue('guestName', '');
+                                                }}
+                                            />
+                                        )}
+                                    />
+                                </Box>
                             </Box>
-                        </Box>
 
-                        {message && (
-                            <Alert severity={message.type} sx={{ mb: 3, borderRadius: '12px' }} onClose={() => setMessage(null)}>
-                                {message.text}
-                            </Alert>
-                        )}
+                            {message && (
+                                <Alert severity={message.type} sx={{ mb: 3, borderRadius: '12px' }} onClose={() => setMessage(null)}>
+                                    {message.text}
+                                </Alert>
+                            )}
 
-                        <Grid container spacing={2}>
-                            {!isGuest ? (
-                                <>
-                                    <Grid size={{ xs: 12 }}>
-                                        <Controller
-                                            name="department"
-                                            control={control}
-                                            render={({ field }) => (
-                                                <FormControl fullWidth variant="outlined">
-                                                    <InputLabel>Filter by Department</InputLabel>
-                                                    <Select
-                                                        {...field}
-                                                        label="Filter by Department"
-                                                        onChange={(e) => {
-                                                            field.onChange(e);
-                                                            setValue('customerId', ''); // Reset customer when dep changes
+                            <Grid container spacing={2}>
+                                {!isGuest ? (
+                                    <>
+                                        <Grid size={{ xs: 12 }}>
+                                            <Controller
+                                                name="department"
+                                                control={control}
+                                                render={({ field }) => (
+                                                    <FormControl fullWidth variant="outlined">
+                                                        <InputLabel>Filter by Department</InputLabel>
+                                                        <Select
+                                                            {...field}
+                                                            label="Filter by Department"
+                                                            onChange={(e) => {
+                                                                field.onChange(e);
+                                                                setValue('customerId', ''); // Reset customer when dep changes
+                                                            }}
+                                                            sx={{ borderRadius: '12px' }}
+                                                        >
+                                                            <MenuItem value=""><em>All Departments</em></MenuItem>
+                                                            {departments.map((dept) => (
+                                                                <MenuItem key={dept} value={dept}>{dept}</MenuItem>
+                                                            ))}
+                                                        </Select>
+                                                    </FormControl>
+                                                )}
+                                            />
+                                        </Grid>
+
+                                        <Grid size={{ xs: 12 }}>
+                                            <Controller
+                                                name="customerId"
+                                                control={control}
+                                                render={({ field: { onChange, value }, fieldState: { error } }) => (
+                                                    <Autocomplete
+                                                        options={filteredCustomers}
+                                                        getOptionLabel={(option) => `${option.name} (${option.deviceId})`}
+                                                        value={customers.find(c => c._id === value) || null}
+                                                        onChange={(_, newValue) => {
+                                                            onChange(newValue ? newValue._id : '');
                                                         }}
-                                                        sx={{ borderRadius: '12px' }}
-                                                    >
-                                                        <MenuItem value=""><em>All Departments</em></MenuItem>
-                                                        {departments.map((dept) => (
-                                                            <MenuItem key={dept} value={dept}>{dept}</MenuItem>
-                                                        ))}
-                                                    </Select>
-                                                </FormControl>
-                                            )}
-                                        />
-                                    </Grid>
-
+                                                        autoHighlight
+                                                        renderInput={(params) => (
+                                                            <TextField
+                                                                {...params}
+                                                                label="Search Customer"
+                                                                placeholder="Type name or device ID..."
+                                                                variant="outlined"
+                                                                error={!!error}
+                                                                helperText={error ? error.message : (selectedDepartment ? `Showing customers in ${selectedDepartment}` : "Type to search by name")}
+                                                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                                                                autoFocus
+                                                            />
+                                                        )}
+                                                        renderOption={(props, option) => {
+                                                            const { key, ...otherProps } = props;
+                                                            return (
+                                                                <li key={key} {...otherProps}>
+                                                                    <Box>
+                                                                        <Typography variant="body1" fontWeight="medium">{option.name}</Typography>
+                                                                        <Typography variant="caption" color="text.secondary">
+                                                                            {option.department} | ID: {option.deviceId}
+                                                                        </Typography>
+                                                                    </Box>
+                                                                </li>
+                                                            )
+                                                        }}
+                                                    />
+                                                )}
+                                            />
+                                        </Grid>
+                                    </>
+                                ) : (
                                     <Grid size={{ xs: 12 }}>
                                         <Controller
-                                            name="customerId"
+                                            name="guestName"
                                             control={control}
-                                            render={({ field: { onChange, value }, fieldState: { error } }) => (
-                                                <Autocomplete
-                                                    options={filteredCustomers}
-                                                    getOptionLabel={(option) => `${option.name} (${option.deviceId})`}
-                                                    value={customers.find(c => c._id === value) || null}
-                                                    onChange={(_, newValue) => {
-                                                        onChange(newValue ? newValue._id : '');
-                                                    }}
-                                                    autoHighlight
-                                                    renderInput={(params) => (
-                                                        <TextField
-                                                            {...params}
-                                                            label="Search Customer"
-                                                            placeholder="Type name or device ID..."
-                                                            variant="outlined"
-                                                            error={!!error}
-                                                            helperText={error ? error.message : (selectedDepartment ? `Showing customers in ${selectedDepartment}` : "Type to search by name")}
-                                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
-                                                            autoFocus
-                                                        />
-                                                    )}
-                                                    renderOption={(props, option) => {
-                                                        const { key, ...otherProps } = props;
-                                                        return (
-                                                            <li key={key} {...otherProps}>
-                                                                <Box>
-                                                                    <Typography variant="body1" fontWeight="medium">{option.name}</Typography>
-                                                                    <Typography variant="caption" color="text.secondary">
-                                                                        {option.department} | ID: {option.deviceId}
-                                                                    </Typography>
-                                                                </Box>
-                                                            </li>
-                                                        )
-                                                    }}
+                                            render={({ field, fieldState: { error } }) => (
+                                                <TextField
+                                                    {...field}
+                                                    label="Guest Name"
+                                                    fullWidth
+                                                    required
+                                                    error={!!error}
+                                                    helperText={error?.message}
+                                                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
                                                 />
                                             )}
                                         />
                                     </Grid>
-                                </>
-                            ) : (
+                                )}
+
                                 <Grid size={{ xs: 12 }}>
                                     <Controller
-                                        name="guestName"
+                                        name="foodItemCode"
                                         control={control}
                                         render={({ field, fieldState: { error } }) => (
+                                            <FormControl fullWidth error={!!error}>
+                                                <InputLabel>Select Meal</InputLabel>
+                                                <Select
+                                                    {...field}
+                                                    label="Select Meal"
+                                                    sx={{ borderRadius: '12px' }}
+                                                >
+                                                    <MenuItem value=""><em>-- Select meal --</em></MenuItem>
+                                                    {foodItems.map((item) => {
+                                                        const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+                                                        const isAvailable = !item.availableDays || item.availableDays.length === 0 || item.availableDays.includes(today);
+
+                                                        return (
+                                                            <MenuItem key={item._id} value={item.code} disabled={!isAvailable}>
+                                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                                                                    <Typography color={!isAvailable ? 'text.disabled' : 'text.primary'}>
+                                                                        {item.name} {!isAvailable && '(Not available today)'}
+                                                                    </Typography>
+                                                                    <Typography variant="caption" sx={{ bgcolor: !isAvailable ? 'action.disabledBackground' : 'action.hover', px: 1, borderRadius: 1 }}>
+                                                                        {item.currency} {item.price.toFixed(2)}
+                                                                    </Typography>
+                                                                </Box>
+                                                            </MenuItem>
+                                                        );
+                                                    })}
+                                                </Select>
+                                                {error && <FormHelperText>{error.message}</FormHelperText>}
+                                            </FormControl>
+                                        )}
+                                    />
+                                </Grid>
+
+                                <Grid size={{ xs: 12 }}>
+                                    <Controller
+                                        name="notes"
+                                        control={control}
+                                        render={({ field }) => (
                                             <TextField
                                                 {...field}
-                                                label="Guest Name"
+                                                label="Notes (Optional)"
                                                 fullWidth
-                                                required
-                                                error={!!error}
-                                                helperText={error?.message}
+                                                multiline
+                                                rows={2}
                                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
                                             />
                                         )}
                                     />
                                 </Grid>
-                            )}
-
-                            <Grid size={{ xs: 12 }}>
-                                <Controller
-                                    name="foodItemCode"
-                                    control={control}
-                                    render={({ field, fieldState: { error } }) => (
-                                        <FormControl fullWidth error={!!error}>
-                                            <InputLabel>Select Meal</InputLabel>
-                                            <Select
-                                                {...field}
-                                                label="Select Meal"
-                                                sx={{ borderRadius: '12px' }}
-                                            >
-                                                <MenuItem value=""><em>-- Select meal --</em></MenuItem>
-                                                {foodItems.map((item) => {
-                                                    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-                                                    const isAvailable = !item.availableDays || item.availableDays.length === 0 || item.availableDays.includes(today);
-
-                                                    return (
-                                                        <MenuItem key={item._id} value={item.code} disabled={!isAvailable}>
-                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                                                                <Typography color={!isAvailable ? 'text.disabled' : 'text.primary'}>
-                                                                    {item.name} {!isAvailable && '(Not available today)'}
-                                                                </Typography>
-                                                                <Typography variant="caption" sx={{ bgcolor: !isAvailable ? 'action.disabledBackground' : 'action.hover', px: 1, borderRadius: 1 }}>
-                                                                    {item.currency} {item.price.toFixed(2)}
-                                                                </Typography>
-                                                            </Box>
-                                                        </MenuItem>
-                                                    );
-                                                })}
-                                            </Select>
-                                            {error && <FormHelperText>{error.message}</FormHelperText>}
-                                        </FormControl>
-                                    )}
-                                />
                             </Grid>
 
-                            <Grid size={{ xs: 12 }}>
-                                <Controller
-                                    name="notes"
-                                    control={control}
-                                    render={({ field }) => (
-                                        <TextField
-                                            {...field}
-                                            label="Notes (Optional)"
-                                            fullWidth
-                                            multiline
-                                            rows={2}
-                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
-                                        />
-                                    )}
-                                />
-                            </Grid>
-                        </Grid>
-
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            color="primary"
-                            disabled={isSubmitting}
-                            fullWidth
-                            size="large"
-                            sx={{
-                                mt: 4,
-                                py: 1.5,
-                                borderRadius: '12px',
-                                fontWeight: 'bold',
-                                fontSize: '1.1rem',
-                                boxShadow: '0 8px 16px rgba(25, 118, 210, 0.2)'
-                            }}
-                        >
-                            {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'Issue & Print Ticket'}
-                        </Button>
+                            <Button
+                                type="submit"
+                                variant="contained"
+                                color="primary"
+                                disabled={isSubmitting}
+                                fullWidth
+                                size="large"
+                                sx={{
+                                    mt: 4,
+                                    py: 1.5,
+                                    borderRadius: '12px',
+                                    fontWeight: 'bold',
+                                    fontSize: '1.1rem',
+                                    boxShadow: '0 8px 16px rgba(25, 118, 210, 0.2)'
+                                }}
+                            >
+                                {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'Issue & Print Ticket'}
+                            </Button>
+                        </Box>
                     </Paper>
                 </Grid>
 

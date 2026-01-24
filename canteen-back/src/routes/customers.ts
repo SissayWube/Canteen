@@ -112,16 +112,16 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
 });
 
-// DELETE (soft-deactivate)
+// DELETE (Soft Delete)
 router.delete('/:id', async (req: Request, res: Response) => {
     try {
         const customer = await Customer.findByIdAndUpdate(
             req.params.id,
-            { isActive: false },
+            { isActive: false, deletedAt: new Date() },
             { new: true }
         );
         if (!customer) return res.status(404).json({ error: 'Customer not found' });
-        res.json({ message: 'Customer deactivated' });
+        res.json({ message: 'Customer deactivated and soft-deleted' });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }

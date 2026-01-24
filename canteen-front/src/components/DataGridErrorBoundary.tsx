@@ -29,7 +29,7 @@ class DataGridErrorBoundary extends Component<Props, State> {
         };
     }
 
-    static getDerivedStateFromError(error: Error): Partial<State> {
+    static getDerivedStateFromError(_: Error): Partial<State> {
         return { hasError: true };
     }
 

@@ -28,7 +28,7 @@ export const handleApiError = (error: unknown, fallbackMessage = 'An error occur
         fallbackMessage;
 
     // Log for debugging in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
         console.error('API Error:', {
             message,
             details: apiError.response?.data?.details,
