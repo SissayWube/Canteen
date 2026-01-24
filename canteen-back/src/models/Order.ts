@@ -38,8 +38,11 @@ const orderSchema: Schema<IOrder> = new Schema({
   operator: { type: Schema.Types.ObjectId, ref: 'User' },
 });
 
-// Compound index for common queries (reports)
-orderSchema.index({ customer: 1, timestamp: -1 });
-orderSchema.index({ timestamp: -1 });
+// Compound indexes for optimized query performance
+orderSchema.index({ customer: 1, timestamp: -1 }); // Customer order history
+orderSchema.index({ timestamp: -1 }); // Recent orders (dashboard)
+orderSchema.index({ status: 1, timestamp: -1 }); // Filter by status + date (Analysis page)
+orderSchema.index({ customer: 1, foodItem: 1, timestamp: -1 }); // Detailed customer-food analysis
+orderSchema.index({ operator: 1, timestamp: -1 }); // Operator performance reports
 
 export default mongoose.model<IOrder>('Order', orderSchema);

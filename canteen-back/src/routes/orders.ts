@@ -9,6 +9,8 @@ import { printTicket } from '../services/printerService';
 import { io } from '../server';
 import OrderService from '../services/OrderService.js';
 import { AuditService } from '../services/AuditService';
+import { validate } from '../middleware/validate';
+import { createOrderSchema, updateOrderSchema } from '../validation/schemas';
 
 const router = express.Router();
 
@@ -54,7 +56,7 @@ interface ManualOrderBody {
     notes?: string;
 }
 
-router.post('/manual', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/manual', requireAuth, validate(createOrderSchema), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const {
             customerId,
@@ -164,7 +166,7 @@ router.post('/:id/reject', requireAuth, async (req: Request, res: Response, next
 });
 
 // PUT /api/orders/:id - Update order details
-router.put('/:id', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.put('/:id', requireAuth, validate(updateOrderSchema), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const order = await OrderService.updateOrder(
             req.params.id,

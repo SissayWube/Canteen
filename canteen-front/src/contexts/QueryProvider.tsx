@@ -1,13 +1,14 @@
 import { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { CONFIG } from '../constants/config';
 
 const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
-            staleTime: 1000 * 60 * 5, // 5 minutes
-            gcTime: 1000 * 60 * 10, // 10 minutes
-            refetchOnWindowFocus: false,
-            retry: 1,
+            staleTime: CONFIG.QUERY_STALE_TIME,
+            gcTime: CONFIG.QUERY_GC_TIME,
+            refetchOnWindowFocus: true, // Enable for better data freshness
+            retry: CONFIG.QUERY_RETRY,
         },
     },
 });

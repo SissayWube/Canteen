@@ -17,6 +17,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import eventRoutes from './routes/device';
 import analysisRoutes from './routes/analysis';
 import auditRoutes from './routes/audit';
+import { corsOptions } from './config/cors';
 
 dotenv.config();
 
@@ -26,13 +27,7 @@ const PORT = process.env.PORT || 5000;
 
 const httpServer = new HttpServer(app);
 export const io = new SocketIOServer(httpServer, {
-    cors: {
-        origin: [
-            process.env.FRONTEND_URL || 'http://localhost:5173',
-            'http://localhost:5174'  // Additional dev port
-        ],
-        credentials: true,
-    },
+    cors: corsOptions
 });
 
 
@@ -49,14 +44,7 @@ connectDB();
 
 // Middleware
 app.use(express.json());
-app.use(cors({
-    origin: [
-        process.env.FRONTEND_URL || 'http://localhost:5173',
-        'http://localhost:3000',
-        'http://localhost:5174'  // Additional dev port
-    ],
-    credentials: true,
-}));
+app.use(cors(corsOptions));
 
 app.use(getSessionMiddleware(mongoose));
 

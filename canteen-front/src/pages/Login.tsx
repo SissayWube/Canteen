@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Button, TextField, Typography, Container, CircularProgress, Alert, Paper } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import logo from '../assets/phibelalogo.png';
+import { handleApiError } from '../utils/errorHandler';
 
 const Login: React.FC = () => {
     const [username, setUsername] = useState('');
@@ -25,8 +26,8 @@ const Login: React.FC = () => {
         try {
             await login(username, password);
             navigate('/');
-        } catch (err: any) {
-            setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
+        } catch (err) {
+            setError(handleApiError(err, 'Login failed. Please check your credentials.'));
             setIsSubmitting(false);
         }
     };

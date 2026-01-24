@@ -6,6 +6,7 @@ import { foodItemsApi, FoodItem } from '../api/foodItems';
 import { ordersApi } from '../api/orders';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
+import { handleApiError } from '../utils/errorHandler';
 
 const ManualIssue: React.FC = () => {
     const queryClient = useQueryClient();
@@ -82,8 +83,8 @@ const ManualIssue: React.FC = () => {
             setGuestName('');
             setNotes('');
             // Keep isGuest toggle as is, or reset? Let's keep it.
-        } catch (err: any) {
-            setMessage({ type: 'error', text: err.response?.data?.error || 'Print failed' });
+        } catch (err) {
+            setMessage({ type: 'error', text: handleApiError(err, 'Failed to issue order') });
         } finally {
             setLoading(false);
         }
