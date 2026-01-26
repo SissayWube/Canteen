@@ -25,7 +25,13 @@ import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import { customersApi, Customer, CustomerFilters } from '../api/customers';
 import TableSkeleton from '../components/TableSkeleton';
 import { useAuth } from '../contexts/AuthContext';
-import { Delete as DeleteIcon, PersonAdd as PersonAddIcon } from '@mui/icons-material';
+import {
+    Delete as DeleteIcon,
+    PersonAdd as PersonAddIcon,
+    CloudUpload as CloudUploadIcon,
+    GetApp as DownloadIcon
+} from '@mui/icons-material';
+import * as XLSX from 'xlsx';
 
 const Customers: React.FC = () => {
     const { user } = useAuth();
@@ -42,6 +48,11 @@ const Customers: React.FC = () => {
         customer: null,
     });
     const [formErrors, setFormErrors] = useState({ deviceId: '', name: '', department: '' });
+
+    // Bulk Import state
+    const [importDialogOpen, setImportDialogOpen] = useState(false);
+    const [importedData, setImportedData] = useState<any[]>([]);
+    const [importLoading, setImportLoading] = useState(false);
 
     // Pagination and filtering
     const [page, setPage] = useState(0);
@@ -182,6 +193,67 @@ const Customers: React.FC = () => {
         setSnackbar({ ...snackbar, open: false });
     };
 
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const bstr = evt.target?.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const wsname = wb.SheetNames[0];
+                const ws = wb.Sheets[wsname];
+                const data = XLSX.utils.sheet_to_json(ws);
+
+                // Basic validation of columns
+                if (data.length > 0) {
+                    const firstRow = data[0] as any;
+                    const required = ['deviceId', 'name', 'department'];
+                    const missing = required.filter(k => !(k in firstRow));
+
+                    if (missing.length > 0) {
+                        showSnackbar(`Missing columns: ${missing.join(', ')}`, 'error');
+                        return;
+                    }
+                }
+
+                setImportedData(data);
+                setImportDialogOpen(true);
+            } catch (err) {
+                showSnackbar('Failed to parse Excel file', 'error');
+            }
+        };
+        reader.readAsBinaryString(file);
+        // Reset input
+        e.target.value = '';
+    };
+
+    const handleBulkImport = async () => {
+        setImportLoading(true);
+        try {
+            const result = await customersApi.bulkCreate(importedData);
+            showSnackbar(result.message, 'success');
+            setImportDialogOpen(false);
+            fetchCustomers();
+        } catch (err: any) {
+            showSnackbar(err?.response?.data?.error || 'Failed to import customers', 'error');
+        } finally {
+            setImportLoading(false);
+        }
+    };
+
+    const downloadTemplate = () => {
+        const template = [
+            { deviceId: '1001', name: 'John Doe', department: 'IT' },
+            { deviceId: '1002', name: 'Jane Smith', department: 'HR' },
+        ];
+        const ws = XLSX.utils.json_to_sheet(template);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Template');
+        XLSX.writeFile(wb, 'customer_import_template.xlsx');
+    };
+
     const columns: GridColDef[] = [
         { field: 'deviceId', headerName: 'Device ID', width: 150, sortable: true },
         { field: 'name', headerName: 'Name', width: 200, sortable: true },
@@ -236,9 +308,33 @@ const Customers: React.FC = () => {
                 <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
                     Customers
                 </Typography>
-                <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => handleOpen()}>
-                    Add Customer
-                </Button>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                    <Button
+                        variant="outlined"
+                        startIcon={<DownloadIcon />}
+                        onClick={downloadTemplate}
+                        size="small"
+                    >
+                        Template
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        component="label"
+                        startIcon={<CloudUploadIcon />}
+                        size="small"
+                    >
+                        Import Excel
+                        <input
+                            type="file"
+                            hidden
+                            accept=".xlsx, .xls"
+                            onChange={handleFileUpload}
+                        />
+                    </Button>
+                    <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => handleOpen()} size="small">
+                        Add Customer
+                    </Button>
+                </Box>
             </Box>
 
             {/* Statistics Cards
@@ -467,6 +563,40 @@ const Customers: React.FC = () => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
+
+            {/* Bulk Import Preview Dialog */}
+            <Dialog open={importDialogOpen} onClose={() => setImportDialogOpen(false)} maxWidth="md" fullWidth>
+                <DialogTitle>Import Preview ({importedData.length} records)</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Please review the data before importing. Duplicate device IDs will be skipped.
+                    </Typography>
+                    <Box sx={{ height: 400, width: '100%' }}>
+                        <DataGrid
+                            density="compact"
+                            rows={importedData.map((row, index) => ({ id: index, ...row }))}
+                            columns={[
+                                { field: 'deviceId', headerName: 'Device ID', width: 150 },
+                                { field: 'name', headerName: 'Name', width: 200 },
+                                { field: 'department', headerName: 'Department', width: 200 },
+                            ]}
+                            hideFooter
+                        />
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setImportDialogOpen(false)} disabled={importLoading}>
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleBulkImport}
+                        variant="contained"
+                        disabled={importLoading || importedData.length === 0}
+                    >
+                        {importLoading ? <CircularProgress size={24} /> : `Confirm Import (${importedData.length})`}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

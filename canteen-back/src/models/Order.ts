@@ -57,5 +57,9 @@ orderSchema.index({ status: 1, timestamp: -1 }); // Filter by status + date (Ana
 orderSchema.index({ timestamp: -1, status: 1 }); // Reverse order for date range + status filters
 orderSchema.index({ customer: 1, foodItem: 1, timestamp: -1 }); // Detailed customer-food analysis
 orderSchema.index({ operator: 1, timestamp: -1 }); // Operator performance reports
+// New indexes for better query performance
+orderSchema.index({ isGuest: 1, timestamp: -1 }); // Guest order filtering
+orderSchema.index({ guestName: 'text' }); // Text search for guest names
+orderSchema.index({ deletedAt: 1, timestamp: -1, status: 1 }); // Dashboard soft delete queries
 
 export default mongoose.model<IOrder>('Order', orderSchema);

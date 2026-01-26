@@ -138,4 +138,60 @@ router.delete('/hard/:id', async (req: Request, res: Response) => {
     }
 });
 
+// POST bulk create customers
+router.post('/bulk', async (req: Request, res: Response) => {
+    try {
+        const customers = req.body;
+        if (!Array.isArray(customers)) {
+            return res.status(400).json({ error: 'Body must be an array of customers' });
+        }
+
+        // Filter out invalid records
+        const validCustomers = customers.filter(c => c.deviceId && c.name && c.department);
+
+        if (validCustomers.length === 0) {
+            return res.status(400).json({ error: 'No valid customer records found' });
+        }
+
+        // Get existing device IDs to prevent duplicates in this batch or in DB
+        const existingCustomers = await Customer.find({
+            deviceId: { $in: validCustomers.map(c => c.deviceId) }
+        }).select('deviceId');
+        const existingDeviceIds = new Set(existingCustomers.map(c => c.deviceId));
+
+        const toInsert = [];
+        const skipped = [];
+
+        // Track device IDs within this batch to prevent duplicates inside the uploaded file
+        const seenInBatch = new Set();
+
+        for (const customer of validCustomers) {
+            if (existingDeviceIds.has(customer.deviceId) || seenInBatch.has(customer.deviceId)) {
+                skipped.push(customer);
+            } else {
+                toInsert.push(customer);
+                seenInBatch.add(customer.deviceId);
+            }
+        }
+
+        if (toInsert.length === 0) {
+            return res.status(400).json({
+                error: 'All customers already exist or are duplicates in the file',
+                skippedCount: skipped.length
+            });
+        }
+
+        const result = await Customer.insertMany(toInsert);
+
+        res.status(201).json({
+            message: `Successfully imported ${result.length} customers`,
+            count: result.length,
+            skippedCount: skipped.length,
+            skipped: skipped.map(s => s.deviceId)
+        });
+    } catch (error: any) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
 export default router;

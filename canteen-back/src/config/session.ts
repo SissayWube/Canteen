@@ -1,6 +1,7 @@
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
 import mongoose from 'mongoose';
+import { SECURITY } from '../constants';
 
 
 export default function getSessionMiddleware(mongooseConnection: typeof mongoose) {
@@ -15,32 +16,13 @@ export default function getSessionMiddleware(mongooseConnection: typeof mongoose
     store: MongoStore.create({
       mongoUrl: process.env.MONGODB_URI!,
       collectionName: 'sessions',
-      ttl: 24 * 60 * 60,
+      ttl: SECURITY.SESSION_TTL_SECONDS,
     }),
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: SECURITY.SESSION_TTL_MS,
     },
   });
-
-
-
-  // export default session({
-  //   secret: process.env.SESSION_SECRET || 'fallback-secret-change-in-prod',
-  //   resave: false,
-  //   saveUninitialized: false,
-  //   store: MongoStore.create({
-  //     mongoUrl: process.env.MONGODB_URI!,
-  //     collectionName: 'sessions',
-  //     ttl: 7 * 24 * 60 * 60,
-  //   }),
-  //   cookie: {
-  //     httpOnly: true,
-  //     secure: process.env.NODE_ENV === 'production',
-  //     sameSite: 'lax',
-  //     maxAge: 7 * 24 * 60 * 60 * 1000,
-  //   },
-  // });
 };

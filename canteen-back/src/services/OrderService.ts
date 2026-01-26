@@ -321,6 +321,12 @@ class OrderService {
                     throw new AppError('Active customer not found', 404);
                 }
 
+                // Check daily limit if customer is changing (to prevent bypassing limits)
+                if (order.customer?.toString() !== customerId) {
+                    const settings = await Settings.findOne() || { dailyMealLimit: ALERTS_CONFIG.DAILY_MEAL_LIMIT };
+                    await this.checkDailyLimit(customerId, settings.dailyMealLimit);
+                }
+
                 order.customer = customer._id as any;
                 order.guestName = '';
             }
@@ -415,6 +421,7 @@ class OrderService {
             // Optimized: Use lean() to reduce memory footprint and only select _id field
             const customersInDept = await Customer.find({
                 department: { $regex: new RegExp(`^${department.trim()}$`, 'i') },
+                deletedAt: null  // Explicit filter for soft delete with .lean()
             }).select('_id').lean();
 
             if (customersInDept.length > 0) {
@@ -450,6 +457,7 @@ class OrderService {
             // Optimized: Use lean() to reduce memory footprint
             const matchingCustomers = await Customer.find({
                 name: { $regex: term, $options: 'i' },
+                deletedAt: null  // Explicit filter for soft delete with .lean()
             }).select('_id').lean();
 
             query.$or = [

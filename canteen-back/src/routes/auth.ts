@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import User from '../models/User';
 import bcrypt from 'bcryptjs';
 import { AuditService } from '../services/AuditService';
+import { SECURITY } from '../constants';
 
 const router = express.Router();
 
@@ -56,7 +57,7 @@ router.post('/change-password', async (req: Request, res: Response) => {
             return res.status(401).json({ error: 'Invalid current password' });
         }
 
-        user.password = await bcrypt.hash(newPassword, 12);
+        user.password = await bcrypt.hash(newPassword, SECURITY.BCRYPT_ROUNDS);
         await user.save();
 
         AuditService.log('Change Password', {}, { req }, 'User', user._id.toString());

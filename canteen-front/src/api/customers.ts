@@ -58,5 +58,10 @@ export const customersApi = {
     delete: async (id: string) => {
         const { data } = await api.delete(`/customers/hard/${id}`);
         return data;
+    },
+
+    bulkCreate: async (customers: Omit<Customer, '_id' | 'isActive' | 'enrolledAt'>[]) => {
+        const { data } = await api.post<{ message: string; count: number; skippedCount: number; skipped: string[] }>('/customers/bulk', customers);
+        return data;
     }
 };

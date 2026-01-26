@@ -2,15 +2,15 @@ import express, { Request, Response } from 'express';
 import Customer from '../models/Customer';
 import FoodItem from '../models/FoodItem';
 import Order from '../models/Order';
-// import { printTicket } from '../services/printerService';
 import { requireDeviceKey } from '../middleware/deviceAuth';
 import Settings from '../models/Settings';
 import { io } from '../server';
+import logger from '../config/logger';
 const router = express.Router();
 
-// Public endpoint — only accessible with correct DEVICE_API_KEY
-// router.post('/', requireDeviceKey, async (req: Request, res: Response) => {
+// Device endpoint — protected with DEVICE_API_KEY
 router.post('/', async (req: Request, res: Response) => {
+
 
     try {
         const { userId, workCode, verifyTime } = req.body;
@@ -94,7 +94,7 @@ router.post('/', async (req: Request, res: Response) => {
             transactionId: order._id,
         });
     } catch (error: any) {
-        console.error('Device event error:', error);
+        logger.error('Device event error:', { error: error.message, stack: error.stack });
         res.status(500).json({ error: 'Internal server error' });
     }
 });

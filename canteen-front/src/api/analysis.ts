@@ -4,17 +4,21 @@ export interface AnalysisOrderRow {
     _id: string;
     timestamp: string;
     customer?: {
+        _id?: string;  // Add for consistency
         name: string;
         department: string;
     };
     foodItem: {
         name: string;
+        code?: string;  // Add for workCode fallback
     };
     operator?: {
         username: string;
     };
     price: number;
     subsidy: number;
+    currency?: string;   // Add for OrderDetailsModal
+    workCode?: string;   // Add for OrderDetailsModal
     status: string;
     notes?: string;
     isGuest?: boolean;
