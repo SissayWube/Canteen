@@ -16,7 +16,7 @@ const seedAdmin = async () => {
   try {
     await Settings.findOneAndUpdate(
       {},
-      { dailyMealLimit: 3, companyName: 'XYZ Company Canteen' },
+      { dailyMealLimit: 3, companyName: 'Phibela Industrial PLC Canteen' },
       { upsert: true }
     );
     const existing = await User.findOne({ username });

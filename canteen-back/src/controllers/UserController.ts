@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import User from '../models/User';
 import bcrypt from 'bcryptjs';
-import { AuditService } from '../services/AuditService';
 
 export const getUsers = async (req: Request, res: Response) => {
     try {
@@ -67,8 +66,6 @@ export const createUser = async (req: Request, res: Response) => {
         const hashed = await bcrypt.hash(password, 12);
         const user = await User.create({ username, password: hashed, role, fullName });
 
-        AuditService.log('Create User', { target: username, role }, { req }, 'User', user._id.toString());
-
         res.status(201).json({ message: 'User created', user: { username: user.username, role: user.role } });
     } catch (error: any) {
         res.status(400).json({ error: error.message });
@@ -87,8 +84,6 @@ export const updateUser = async (req: Request, res: Response) => {
         }).select('-password');
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        AuditService.log('Update User', { target: user.username, updates: Object.keys(updates) }, { req }, 'User', user._id.toString());
-
         res.json(user);
     } catch (error: any) {
         res.status(400).json({ error: error.message });
@@ -99,8 +94,6 @@ export const deleteUser = async (req: Request, res: Response) => {
     try {
         const user = await User.findByIdAndDelete(req.params.id);
         if (!user) return res.status(404).json({ error: 'User not found' });
-
-        AuditService.log('Delete User', { target: user.username }, { req }, 'User', user._id.toString());
 
         res.json({ message: 'User deleted' });
     } catch (error: any) {

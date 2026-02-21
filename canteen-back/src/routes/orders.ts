@@ -24,4 +24,7 @@ router.post('/:id/reject', OrderController.rejectOrder);
 // PUT /api/orders/:id - Update order details
 router.put('/:id', validate(updateOrderSchema), OrderController.updateOrder);
 
+// POST /api/orders/:id/reprint - Reprint ticket
+router.post('/:id/reprint', OrderController.reprintOrder);
+
 export default router;

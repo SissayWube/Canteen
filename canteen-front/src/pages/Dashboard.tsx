@@ -57,7 +57,7 @@ const Dashboard: React.FC = () => {
     const [actionLoading, setActionLoading] = useState(false);
     const [confirmRejectOpen, setConfirmRejectOpen] = useState(false);
     const [confirmApproveOpen, setConfirmApproveOpen] = useState(false);
-    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'warning' }>({
         open: false,
         message: '',
         severity: 'success'
@@ -98,6 +98,7 @@ const Dashboard: React.FC = () => {
         guestName: '',
         notes: ''
     });
+    const [reprintLoading, setReprintLoading] = useState(false);
 
     // Reset edit state when modal closes or changes
     React.useEffect(() => {
@@ -233,6 +234,29 @@ const Dashboard: React.FC = () => {
             });
         } finally {
             setActionLoading(false);
+        }
+    };
+
+    const handleReprint = async () => {
+        if (!selectedOrder) return;
+        setReprintLoading(true);
+        try {
+            const result = await ordersApi.reprint(selectedOrder._id);
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
+            setSnackbar({
+                open: true,
+                message: result.message || 'Ticket reprinted successfully!',
+                severity: result.printed ? 'success' : 'warning'
+            });
+        } catch (error: any) {
+            console.error('Failed to reprint ticket:', error);
+            setSnackbar({
+                open: true,
+                message: error.response?.data?.error || 'Failed to reprint ticket.',
+                severity: 'error'
+            });
+        } finally {
+            setReprintLoading(false);
         }
     };
 
@@ -516,6 +540,8 @@ const Dashboard: React.FC = () => {
                 onUpdateOrder={handleUpdateOrder}
                 onCancelEdit={() => setIsEditing(false)}
                 actionLoading={actionLoading}
+                onReprint={handleReprint}
+                reprintLoading={reprintLoading}
             />
 
             {/* Confirmation Dialogs */}

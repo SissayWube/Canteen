@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import OrderService from '../services/OrderService';
 import { printTicket } from '../services/printerService';
-import { AuditService } from '../services/AuditService';
 import { io } from '../server';
+import Order from '../models/Order';
 
 interface ManualOrderBody {
     customerId?: string;
@@ -67,8 +67,6 @@ export const createManualOrder = async (req: Request, res: Response, next: NextF
         order.ticketPrinted = printSuccess;
         await order.save();
 
-        AuditService.log('Manual Order', { orderId: order._id, customer: ticketData.customerName, meal: ticketData.mealName }, { req }, 'Order', order._id.toString());
-
         // Notify dashboard
         if (io) {
             io.emit('orderApproved', {
@@ -106,8 +104,6 @@ export const approveOrder = async (req: Request, res: Response, next: NextFuncti
         order.ticketPrinted = printSuccess;
         await order.save();
 
-        AuditService.log('Approve Order', { orderId: order._id }, { req }, 'Order', order._id.toString());
-
         // Notify all clients
         if (io) {
             io.emit('orderApproved', {
@@ -131,8 +127,6 @@ export const rejectOrder = async (req: Request, res: Response, next: NextFunctio
             req.session.userId!,
             reason
         );
-
-        AuditService.log('Reject Order', { orderId: req.params.id, reason }, { req }, 'Order', req.params.id);
 
         // Notify all clients
         if (io) {
@@ -162,6 +156,30 @@ export const updateOrder = async (req: Request, res: Response, next: NextFunctio
         }
 
         res.json({ success: true, order });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const reprintOrder = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const ticketData = await OrderService.getTicketData(
+            req.params.id,
+            req.session.username
+        );
+
+        const printSuccess = await printTicket(ticketData);
+
+        if (printSuccess) {
+            // Update ticketPrinted flag
+            await Order.findByIdAndUpdate(req.params.id, { ticketPrinted: true });
+        }
+
+        res.json({
+            success: true,
+            printed: printSuccess,
+            message: printSuccess ? 'Ticket reprinted successfully' : 'Reprint failed'
+        });
     } catch (error) {
         next(error);
     }

@@ -8,8 +8,9 @@ import dayjs, { Dayjs } from 'dayjs';
 import { customersApi, Customer } from '../api/customers';
 import { foodItemsApi, FoodItem } from '../api/foodItems';
 import { analysisApi, AnalysisFilters as ApiAnalysisFilters, AnalysisOrderRow } from '../api/analysis';
+import { ordersApi } from '../api/orders';
 import OrderDetailsModal from '../components/OrderDetailsModal';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import AnalysisFilters from './analysis/AnalysisFilters';
 import AnalysisTable from './analysis/AnalysisTable';
@@ -30,6 +31,9 @@ const Analysis: React.FC = () => {
     // State for row selection
     const [selectedRows, setSelectedRows] = useState<GridRowSelectionModel>({ type: 'include', ids: new Set() });
     const [selectedOrder, setSelectedOrder] = useState<AnalysisOrderRow | null>(null);
+    const [reprintLoading, setReprintLoading] = useState(false);
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'warning' }>({ open: false, message: '', severity: 'success' });
+    const queryClient = useQueryClient();
 
     // Build filters for React Query
     const filters: ApiAnalysisFilters = useMemo(() => {
@@ -96,6 +100,29 @@ const Analysis: React.FC = () => {
         window.addEventListener('keydown', handleKeyPress);
         return () => window.removeEventListener('keydown', handleKeyPress);
     }, [data, from, to, selectedStatus]);
+
+    const handleReprint = async () => {
+        if (!selectedOrder) return;
+        setReprintLoading(true);
+        try {
+            const result = await ordersApi.reprint(selectedOrder._id);
+            queryClient.invalidateQueries({ queryKey: ['analysis'] });
+            setSnackbar({
+                open: true,
+                message: result.message || 'Ticket reprinted successfully!',
+                severity: result.printed ? 'success' : 'warning'
+            });
+        } catch (error: any) {
+            console.error('Failed to reprint ticket:', error);
+            setSnackbar({
+                open: true,
+                message: error.response?.data?.error || 'Failed to reprint ticket.',
+                severity: 'error'
+            });
+        } finally {
+            setReprintLoading(false);
+        }
+    };
 
     const handleClearFilters = () => {
         setFrom(dayjs());
@@ -199,7 +226,29 @@ const Analysis: React.FC = () => {
                 order={selectedOrder}
                 onClose={() => setSelectedOrder(null)}
                 readOnly={true}
+                onReprint={handleReprint}
+                reprintLoading={reprintLoading}
             />
+
+            {/* Snackbar for reprint notifications */}
+            <Box
+                sx={{
+                    position: 'fixed',
+                    bottom: 16,
+                    right: 16,
+                    zIndex: 9999
+                }}
+            >
+                {snackbar.open && (
+                    <Alert
+                        severity={snackbar.severity}
+                        onClose={() => setSnackbar({ ...snackbar, open: false })}
+                        sx={{ minWidth: 300 }}
+                    >
+                        {snackbar.message}
+                    </Alert>
+                )}
+            </Box>
         </Box>
     );
 };

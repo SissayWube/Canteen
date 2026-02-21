@@ -1,7 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import Settings from '../models/Settings';
 import { requireAuth } from '../middleware/auth';
-import { AuditService } from '../services/AuditService';
 
 const router = express.Router();
 
@@ -48,8 +47,6 @@ router.patch('/', requireAdmin, async (req: Request, res: Response) => {
         settings.updatedBy = req.session.userId as any;
 
         await settings.save();
-
-        AuditService.log('Update Settings', { updates: req.body }, { req }, 'Settings', settings._id.toString());
 
         res.json(settings);
     } catch (error: any) {

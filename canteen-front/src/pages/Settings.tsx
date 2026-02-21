@@ -1,11 +1,8 @@
 // src/pages/Settings.tsx
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, TextField, Button, Alert, CircularProgress, Paper, Tabs, Tab } from '@mui/material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import api from '../api/api';
 import { useAuth } from '../contexts/AuthContext';
-import { auditApi, AuditLog } from '../api/audit';
-import dayjs from 'dayjs';
 
 interface SettingsForm {
   companyName: string;
@@ -26,10 +23,6 @@ const Settings: React.FC = () => {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Audit Logs State
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [auditLoading, setAuditLoading] = useState(false);
-  const [auditPagination, setAuditPagination] = useState({ page: 1, limit: 20, total: 0 });
   const [tabValue, setTabValue] = useState(0);
 
   const { user } = useAuth();
@@ -37,12 +30,6 @@ const Settings: React.FC = () => {
   useEffect(() => {
     fetchSettings();
   }, []);
-
-  useEffect(() => {
-    if (tabValue === 2 && user?.role === 'admin') {
-      fetchAuditLogs();
-    }
-  }, [tabValue, auditPagination.page, user]);
 
   const fetchSettings = async () => {
     try {
@@ -58,18 +45,7 @@ const Settings: React.FC = () => {
     }
   };
 
-  const fetchAuditLogs = async () => {
-    setAuditLoading(true);
-    try {
-      const data = await auditApi.getAll(auditPagination.page, auditPagination.limit);
-      setAuditLogs(data.logs);
-      setAuditPagination(prev => ({ ...prev, total: data.pagination.total }));
-    } catch (error) {
-      console.error("Failed to fetch logs", error);
-    } finally {
-      setAuditLoading(false);
-    }
-  };
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -117,20 +93,7 @@ const Settings: React.FC = () => {
     setTabValue(newValue);
   };
 
-  const auditColumns: GridColDef[] = [
-    { field: 'timestamp', headerName: 'Time', width: 180, valueFormatter: (value: any) => dayjs(value).format('MMM D, HH:mm:ss') },
-    { field: 'action', headerName: 'Action', width: 150 },
-    { field: 'performedByUsername', headerName: 'User', width: 120 },
-    { field: 'subModel', headerName: 'Target', width: 100 },
-    {
-      field: 'details',
-      headerName: 'Details',
-      width: 300,
-      flex: 1,
-      valueGetter: (value: any) => JSON.stringify(value)
-    },
-    { field: 'ipAddress', headerName: 'IP', width: 130 },
-  ];
+
 
   if (loading) {
     return <CircularProgress sx={{ display: 'block', mx: 'auto', mt: 5 }} />;
@@ -144,7 +107,7 @@ const Settings: React.FC = () => {
         <Tabs value={tabValue} onChange={handleTabChange} aria-label="settings tabs">
           {user?.role === 'admin' && <Tab label="General" />}
           <Tab label="Security" />
-          {user?.role === 'admin' && <Tab label="Audit Logs" />}
+
         </Tabs>
       </Box>
 
@@ -220,23 +183,7 @@ const Settings: React.FC = () => {
         </Paper>
       )}
 
-      {/* Audit Logs Tab */}
-      {user?.role === 'admin' && tabValue === 2 && (
-        <Paper sx={{ height: 600, width: '100%' }}>
-          <DataGrid
-            rows={auditLogs}
-            columns={auditColumns}
-            loading={auditLoading}
-            getRowId={(row) => row._id}
-            paginationMode="server"
-            rowCount={auditPagination.total}
-            pageSizeOptions={[20, 50, 100]}
-            paginationModel={{ page: auditPagination.page - 1, pageSize: auditPagination.limit }}
-            onPaginationModelChange={(model) => setAuditPagination(prev => ({ ...prev, page: model.page + 1, limit: model.pageSize }))}
-            disableRowSelectionOnClick
-          />
-        </Paper>
-      )}
+
     </Box>
   );
 };

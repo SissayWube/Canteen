@@ -129,12 +129,14 @@ class OrderService {
 
         let ticketCustomerName = '';
         let ticketCustomerId = '';
+        let ticketDepartment = '';
 
         if (isGuest) {
             orderData.isGuest = true;
             orderData.guestName = guestName.trim() || 'Guest';
             ticketCustomerName = orderData.guestName;
             ticketCustomerId = orderData.guestName;
+            ticketDepartment = 'Guest';
         } else {
             if (!customerId || !mongoose.Types.ObjectId.isValid(customerId)) {
                 throw new AppError('Valid customerId required for non-guest', 400);
@@ -152,6 +154,7 @@ class OrderService {
             orderData.customer = customer._id;
             ticketCustomerName = customer.name;
             ticketCustomerId = customer.deviceId;
+            ticketDepartment = customer.department || '';
 
             // Check daily limit for employees
             await this.checkDailyLimit(customer._id.toString(), settings.dailyMealLimit);
@@ -169,10 +172,15 @@ class OrderService {
         return {
             order,
             ticketData: {
-                companyName: settings.companyName,
+                companyName: "Phibela Industrial PLC Canteen",
                 customerName: ticketCustomerName,
                 customerId: ticketCustomerId,
+                department: ticketDepartment,
                 mealName: foodItem.name,
+                mealCode: foodItem.code,
+                price: foodItem.price,
+                subsidy: foodItem.subsidy || 0,
+                currency: foodItem.currency || 'ETB',
                 timestamp: order.timestamp,
                 orderId: order._id.toString().slice(-8),
                 operatorName: operatorUsername,
@@ -220,7 +228,7 @@ class OrderService {
         order.operator = operatorId as any; // Cast needed as operator can be ObjectId or populated
         await order.save();
 
-        const settings = await Settings.findOne() || { companyName: 'Company Canteen' };
+        // const settings = await Settings.findOne() || { companyName: 'Company Canteen' };
 
         logger.info('Order approved', {
             orderId: order._id,
@@ -231,10 +239,15 @@ class OrderService {
         return {
             order,
             ticketData: {
-                companyName: settings.companyName,
+                companyName: "Phibela Industrial PLC Canteen",
                 customerName: order.customer.name,
                 customerId: order.customer.deviceId,
+                department: order.customer.department || '',
                 mealName: order.foodItem.name,
+                mealCode: order.foodItem.code,
+                price: order.price,
+                subsidy: order.subsidy || 0,
+                currency: order.foodItem.currency || 'ETB',
                 timestamp: order.timestamp,
                 orderId: order._id.toString().slice(-8),
                 operatorName: operatorUsername,
@@ -269,6 +282,54 @@ class OrderService {
         });
 
         return order;
+    }
+
+    /**
+     * Get ticket data for reprinting
+     */
+    async getTicketData(orderId: string, operatorUsername?: string) {
+        const order = await Order.findById(orderId)
+            .populate('customer', 'name deviceId department')
+            .populate('foodItem', 'name code price subsidy currency') as PopulatedOrder | null;
+
+        if (!order) {
+            throw new AppError('Order not found', 404);
+        }
+
+        if (order.status !== 'approved') {
+            throw new AppError('Only approved orders can be reprinted', 400);
+        }
+
+        const settings = await Settings.findOne() || { companyName: 'Company Canteen' };
+
+        let customerName = '';
+        let customerId = '';
+        let department = '';
+
+        if (order.isGuest) {
+            customerName = order.guestName || 'Guest';
+            customerId = order.guestName || 'Guest';
+            department = 'Guest';
+        } else if (order.customer) {
+            customerName = order.customer.name;
+            customerId = order.customer.deviceId;
+            department = order.customer.department || '';
+        }
+
+        return {
+            companyName: settings.companyName,
+            customerName,
+            customerId,
+            department,
+            mealName: order.foodItem?.name || 'N/A',
+            mealCode: order.foodItem?.code || '',
+            price: order.price,
+            subsidy: order.subsidy || 0,
+            currency: order.foodItem?.currency || 'ETB',
+            timestamp: order.timestamp,
+            orderId: order._id.toString().slice(-8),
+            operatorName: operatorUsername,
+        };
     }
 
     /**

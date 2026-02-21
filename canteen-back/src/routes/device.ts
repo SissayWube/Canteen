@@ -8,23 +8,56 @@ import { io } from '../server';
 import logger from '../config/logger';
 const router = express.Router();
 
-// Device endpoint — protected with DEVICE_API_KEY
-router.post('/', async (req: Request, res: Response) => {
 
 
-    try {
-        const { userId, workCode, verifyTime } = req.body;
+router.post('/iclock/cdata', async (req: Request, res: Response) => {
+    console.log('=== ZKTeco Device Request Received ===');
+    console.log('Query:', req.query);
+    console.log('Headers:', req.headers);
+    console.log('Raw Body (text):', req.body || '(empty)');
+    const table = req.query.table as string;
+
+    // Always respond with OK to keep device happy
+    res.set('Content-Type', 'text/plain');
+    res.send('OK\n');
 
 
-        // Basic validation
-        if (!userId || !workCode) {
-            return res.status(400).json({ error: 'Missing userId or workCode' });
+    if (table !== 'ATTLOG') {
+        console.log(`Ignoring non-attendance table: ${table}`);
+        return;
+    }
+
+    const rawBody = req.body as string;
+    if (!rawBody) return;
+
+    const lines = rawBody.trim().split('\n');
+
+    for (const line of lines) {
+        if (!line.trim()) continue;
+
+        // Parse ATTLOG line: Date Time   PIN   WorkCode   VerifyType   Reserved
+        const parts = line.trim().split(/\s+/);
+
+        if (parts.length < 4) {
+            console.log('Invalid ATTLOG line:', line);
+            continue;
         }
 
+        const dateStr = parts[2];  // e.g., 17/01/26
+        const timeStr = parts[1];  // e.g., 14:32:15
+        // UserID
+        const pin = parts[0];      // Device PIN = customer.deviceId
+        const workCode = parts[5]; // Meal/work code
+
+        const timestamp = `${dateStr} ${timeStr}`;
+
+        console.log(`✅ ATTENDANCE EVENT → User ID: ${pin} | Food ID: ${workCode} | Time: ${timestamp}`);
+
+
         // 1. Find customer by deviceId(customer id) (userId from ZKTeco = our deviceId field)
-        const customer = await Customer.findOne({ deviceId: String(userId), isActive: true });
+        const customer = await Customer.findOne({ deviceId: String(pin), isActive: true });
         if (!customer) {
-            return res.status(404).json({ error: 'Customer not found or inactive' });
+            return console.log('Customer not found or inactive');
         }
 
 
@@ -40,26 +73,21 @@ router.post('/', async (req: Request, res: Response) => {
         });
 
         if (mealsToday >= settings.dailyMealLimit) {
-            return res.status(403).json({
-                error: 'Daily meal limit reached',
-                mealsToday,
-                limit: settings.dailyMealLimit,
-            });
+            return console.log('Daily meal limit reached');
         }
 
         // 2. Find active food item by work code
         const foodItem = await FoodItem.findOne({ code: String(workCode), isActive: true });
         if (!foodItem) {
-            return res.status(404).json({ error: 'Invalid or inactive meal code' });
+            return console.log('Invalid or inactive meal code');
         }
 
         // Check available days
         if (foodItem.availableDays && foodItem.availableDays.length > 0) {
             const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
             if (!foodItem.availableDays.includes(today)) {
-                return res.status(403).json({
-                    error: `This meal is only available on: ${foodItem.availableDays.join(', ')}. Today is ${today}.`
-                });
+                return console.log('This meal is only available on: ${foodItem.availableDays.join(', ')}. Today is ${today}.')
+
             }
         }
 
@@ -87,16 +115,15 @@ router.post('/', async (req: Request, res: Response) => {
             });
         }
 
-        // 5. Return success response   
-        res.json({
-            success: true,
-            message: 'Order received - awaiting operator approval',
-            transactionId: order._id,
-        });
-    } catch (error: any) {
-        logger.error('Device event error:', { error: error.message, stack: error.stack });
-        res.status(500).json({ error: 'Internal server error' });
+        return
+
     }
 });
+
+
+
+
+
+
 
 export default router;

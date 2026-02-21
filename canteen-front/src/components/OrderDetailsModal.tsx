@@ -21,7 +21,8 @@ import {
     CheckCircle as ApproveIcon,
     Cancel as RejectIcon,
     Edit as EditIcon,
-    Save as SaveIcon
+    Save as SaveIcon,
+    Print as PrintIcon
 } from '@mui/icons-material';
 
 import { Customer } from '../api/customers';
@@ -68,12 +69,15 @@ export interface OrderDetailsModalProps {
     onCancelEdit?: () => void;
     actionLoading?: boolean;
     readOnly?: boolean;
+    onReprint?: () => void;
+    reprintLoading?: boolean;
 }
 
 const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
     open, order, onClose, onApprove, onReject, onEnterEditMode,
     isEditing = false, editLoading = false, customers = [], foodItems = [], editFormData,
-    setEditFormData, onUpdateOrder, onCancelEdit, actionLoading = false, readOnly = false
+    setEditFormData, onUpdateOrder, onCancelEdit, actionLoading = false, readOnly = false,
+    onReprint, reprintLoading = false
 }) => {
     if (!order) return null;
 
@@ -89,7 +93,10 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
             PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}
         >
             <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'background.default' }}>
-                <Typography variant="h6" fontWeight="bold">Order Details</Typography>
+                <Box>
+                    <Typography variant="h6" fontWeight="bold">Order Details</Typography>
+                    <Typography variant="caption" color="text.secondary">ID: {order._id.slice(-8).toUpperCase()}</Typography>
+                </Box>
                 <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
             </DialogTitle>
 
@@ -256,6 +263,18 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                                     </Button>
                                 )}
                             </>
+                        )}
+                        {!readOnly && order.status === 'approved' && onReprint && (
+                            <Button
+                                variant="outlined"
+                                color="primary"
+                                onClick={onReprint}
+                                disabled={reprintLoading}
+                                startIcon={reprintLoading ? <CircularProgress size={16} color="inherit" /> : <PrintIcon />}
+                                size="small"
+                            >
+                                Reprint
+                            </Button>
                         )}
                         <Button variant="text" color="inherit" onClick={onClose} size="small">Close</Button>
                     </>

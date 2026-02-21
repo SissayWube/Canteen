@@ -79,5 +79,10 @@ export const ordersApi = {
     }>) => {
         const response = await api.put<{ success: boolean; order: Order }>(`/orders/${orderId}`, data);
         return response.data;
+    },
+
+    reprint: async (orderId: string) => {
+        const response = await api.post<{ success: boolean; printed: boolean; message: string }>(`/orders/${orderId}/reprint`);
+        return response.data;
     }
 };
