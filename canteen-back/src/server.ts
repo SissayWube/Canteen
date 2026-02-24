@@ -1,31 +1,36 @@
 import dotenv from 'dotenv';
+dotenv.config({ path: '.env', override: true });
+console.log('MONGODB_URI loaded:', process.env.MONGODB_URI ? 'YES' : 'NO');
+console.log('SESSION_SECRET loaded:', process.env.SESSION_SECRET ? 'YES' : 'NO');
+import getSessionMiddleware from './config/session.js';
 import express from 'express';
-import cors from 'cors';
-import getSessionMiddleware from './config/session';
-import connectDB from './config/db';
+import connectDB from './config/db.js';
 import mongoose from 'mongoose';
-import logger from './config/logger';
-import { errorHandler } from './middleware/errorHandler';
-import authRoutes from './routes/auth';
-import foodItemRoutes from './routes/foodItems';
-import userRoutes from './routes/users';
-import customerRoutes from './routes/customers';
-import settingsRoutes from './routes/settings';
-import orderRoutes from './routes/orders';
+import logger from './config/logger.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import authRoutes from './routes/auth.js';
+import foodItemRoutes from './routes/foodItems.js';
+import userRoutes from './routes/users.js';
+import customerRoutes from './routes/customers.js';
+import settingsRoutes from './routes/settings.js';
+import orderRoutes from './routes/orders.js';
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import eventRoutes from './routes/device';
-import analysisRoutes from './routes/analysis';
-import { corsOptions } from './config/cors';
-import deviceRoutes from './routes/device';
+import eventRoutes from './routes/device.js';
+import analysisRoutes from './routes/analysis.js';
+import { corsOptions } from './config/cors.js';
+import deviceRoutes from './routes/device.js';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import cors from 'cors';
+import { mongoSanitize } from './middleware/mongoSanitize.js';
 
-dotenv.config();
-
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
-
-
 const httpServer = new HttpServer(app);
+
 export const io = new SocketIOServer(httpServer, {
     cors: corsOptions
 });
@@ -42,15 +47,15 @@ io.on('connection', (socket) => {
 // Connect to Database
 connectDB();
 
-import { mongoSanitize } from './middleware/mongoSanitize';
 
 // Middleware
+app.use(getSessionMiddleware(mongoose));
 app.use(express.text({ type: 'text/plain' }));
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(mongoSanitize); // Custom sanitization middleware to prevent NoSQL injection
 
-app.use(getSessionMiddleware(mongoose));
+
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -63,27 +68,22 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/analysis', analysisRoutes);
 app.use('', deviceRoutes);
 
-/////
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-///////
 
 // Health check endpoint 
 app.get('/health', (_req, res) => {
     res.status(200).json({ status: 'OK', db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' });
 });
+
+app.use(express.static(path.join(__dirname, '../client/dist')));
+
+// Catch-all: serve index.html for ALL non-API routes
+app.use((req, res, next) => {
+    if (req.path.startsWith('/api')) {
+        return next(); // Let API routes handle /api/...
+    }
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+})
+
 
 // Global error handler (must be last)
 app.use(errorHandler);

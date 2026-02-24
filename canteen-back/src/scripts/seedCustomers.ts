@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
-import Customer from '../models/Customer';
-import connectDB from '../config/db';
+import Customer from '../models/Customer.js';
+import connectDB from '../config/db.js';
 
 dotenv.config();
 

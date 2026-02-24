@@ -1,8 +1,8 @@
 import express from 'express';
-import { requireAuth } from '../middleware/auth';
-import { validate } from '../middleware/validate';
-import { createOrderSchema, updateOrderSchema } from '../validation/schemas';
-import * as OrderController from '../controllers/OrderController';
+import { requireAuth } from '../middleware/auth.js';
+import { validate } from '../middleware/validate.js';
+import { createOrderSchema, updateOrderSchema } from '../validation/schemas.js';
+import * as OrderController from '../controllers/OrderController.js';
 
 const router = express.Router();
 

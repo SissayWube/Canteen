@@ -1,20 +1,18 @@
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
 import mongoose from 'mongoose';
-import { SECURITY } from '../constants';
-
+import { SECURITY } from '../constants/index.js';
 
 export default function getSessionMiddleware(mongooseConnection: typeof mongoose) {
-  if (!process.env.MONGODB_URI || !process.env.SESSION_SECRET) {
-    throw new Error('Missing required env vars for session');
+  if (!process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI is not defined in .env');
   }
-
   return session({
-    secret: process.env.SESSION_SECRET || 'fallback-secret-change-in-prod',
+    secret: process.env.SESSION_SECRET || 'fallback-secret-change-this',
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({
-      mongoUrl: process.env.MONGODB_URI!,
+      client: mongooseConnection.connection.getClient() as any,
       collectionName: 'sessions',
       ttl: SECURITY.SESSION_TTL_SECONDS,
     }),
@@ -25,4 +23,4 @@ export default function getSessionMiddleware(mongooseConnection: typeof mongoose
       maxAge: SECURITY.SESSION_TTL_MS,
     },
   });
-};
+}

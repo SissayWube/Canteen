@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { IOrder } from '../models/Order';
+import { IOrder } from '../models/Order.js';
 
 /**
  * Type-safe interfaces for populated Mongoose documents

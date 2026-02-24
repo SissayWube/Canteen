@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { z, ZodError } from 'zod';
-import logger from '../config/logger';
+import logger from '../config/logger.js';
 
 /**
  * Validation middleware factory

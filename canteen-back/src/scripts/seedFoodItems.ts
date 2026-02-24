@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
-import FoodItem from '../models/FoodItem';
-import connectDB from '../config/db';
-import type { IFoodItem } from '../models/FoodItem';
+import FoodItem from '../models/FoodItem.js';
+import connectDB from '../config/db.js';
+import type { IFoodItem } from '../models/FoodItem.js';
 
 dotenv.config();
 

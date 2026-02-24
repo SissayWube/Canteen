@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import OrderService from '../services/OrderService';
-import { printTicket } from '../services/printerService';
-import { io } from '../server';
-import Order from '../models/Order';
+import OrderService from '../services/OrderService.js';
+import { printTicket } from '../services/printerService.js';
+import { io } from '../server.js';
+import Order from '../models/Order.js';
 
 interface ManualOrderBody {
     customerId?: string;

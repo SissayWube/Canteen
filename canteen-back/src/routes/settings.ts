@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
-import Settings from '../models/Settings';
-import { requireAuth } from '../middleware/auth';
+import Settings from '../models/Settings.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 

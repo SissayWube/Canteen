@@ -1,12 +1,12 @@
 import mongoose from 'mongoose';
-import Order from '../models/Order';
-import Customer from '../models/Customer';
-import FoodItem from '../models/FoodItem';
-import Settings from '../models/Settings';
-import { AppError } from '../middleware/errorHandler';
-import logger from '../config/logger';
-import { PopulatedOrder } from '../types/populated';
-import { PAGINATION, ALERTS_CONFIG, DEFAULTS } from '../constants';
+import Order from '../models/Order.js';
+import Customer from '../models/Customer.js';
+import FoodItem from '../models/FoodItem.js';
+import Settings from '../models/Settings.js';
+import { AppError } from '../middleware/errorHandler.js';
+import logger from '../config/logger.js';
+import { PopulatedOrder } from '../types/populated.js';
+import { PAGINATION, ALERTS_CONFIG, DEFAULTS } from '../constants/index.js';
 
 export interface CreateManualOrderData {
     customerId?: string;

@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
-import Customer from '../models/Customer';
-import { requireAuth } from '../middleware/auth';
+import Customer from '../models/Customer.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 

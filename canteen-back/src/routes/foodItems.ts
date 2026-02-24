@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
-import FoodItem from '../models/FoodItem';
-import { requireAuth } from '../middleware/auth';
+import FoodItem from '../models/FoodItem.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 

@@ -1,11 +1,11 @@
 import express, { Request, Response } from 'express';
-import Customer from '../models/Customer';
-import FoodItem from '../models/FoodItem';
-import Order from '../models/Order';
-import { requireDeviceKey } from '../middleware/deviceAuth';
-import Settings from '../models/Settings';
-import { io } from '../server';
-import logger from '../config/logger';
+import Customer from '../models/Customer.js';
+import FoodItem from '../models/FoodItem.js';
+import Order from '../models/Order.js';
+import { requireDeviceKey } from '../middleware/deviceAuth.js';
+import Settings from '../models/Settings.js';
+import { io } from '../server.js';
+import logger from '../config/logger.js';
 const router = express.Router();
 
 

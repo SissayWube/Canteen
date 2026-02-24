@@ -1,9 +1,9 @@
 // src/scripts/seedAdmin.ts
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
-import User from '../models/User';
-import connectDB from '../config/db';
-import Settings from '../models/Settings';
+import User from '../models/User.js';
+import connectDB from '../config/db.js';
+import Settings from '../models/Settings.js';
 
 dotenv.config();
 

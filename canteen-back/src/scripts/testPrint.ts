@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config();
-import { printTicket } from '../services/printerService';
+import { printTicket } from '../services/printerService.js';
 
 async function test() {
   const success = await printTicket({
