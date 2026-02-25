@@ -13,6 +13,7 @@ import Analysis from './pages/Analysis';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import Users from './pages/Users';
+import Departments from './pages/Departments';
 import NotFound from './pages/NotFound';
 import ErrorBoundary from './components/ErrorBoundary';
 import GlobalSocketHandler from './components/GlobalSocketHandler';
@@ -45,6 +46,7 @@ function App() {
                   <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
                   <Route path="/analysis" element={<ErrorBoundary><Analysis /></ErrorBoundary>} />
                   <Route path="/users" element={<ErrorBoundary><Users /></ErrorBoundary>} />
+                  <Route path="/departments" element={<ErrorBoundary><Departments /></ErrorBoundary>} />
                   <Route path="*" element={<ErrorBoundary><NotFound /></ErrorBoundary>} />
                 </Route>
               </Route>

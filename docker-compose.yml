@@ -1,0 +1,51 @@
+services:
+  # ─── MongoDB ───────────────────────────────────────────────
+  mongo:
+    image: mongo:7
+    container_name: canteen-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─── Backend (Express + TypeScript) ────────────────────────
+  backend:
+    build:
+      context: ./canteen-back
+      dockerfile: Dockerfile
+    container_name: canteen-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./canteen-back/.env
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/canteen-system
+      - NODE_ENV=production
+      - FRONTEND_URL=http://localhost:5173
+      - COOKIE_SECURE=false
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  # ─── Frontend (React + Vite) ───────────────────────────────
+  frontend:
+    build:
+      context: ./canteen-front
+      dockerfile: Dockerfile
+    container_name: canteen-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo-data:

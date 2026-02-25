@@ -7,13 +7,11 @@ import Settings from '../models/Settings.js';
 
 dotenv.config();
 
-const seedAdmin = async () => {
-  await connectDB();
-
-  const username = 'admin';
-  const password = 'admin123'; // CHANGE THIS AFTER FIRST LOGIN!
-
+export const seedAdmin = async () => {
   try {
+    const username = 'admin';
+    const password = 'admin123'; // CHANGE THIS AFTER FIRST LOGIN!
+
     await Settings.findOneAndUpdate(
       {},
       { dailyMealLimit: 3, companyName: 'Phibela Industrial PLC Canteen' },
@@ -21,7 +19,7 @@ const seedAdmin = async () => {
     );
     const existing = await User.findOne({ username });
     if (existing) {
-      console.log('Admin user already exists');
+      console.log('Admin user already exists, skipping seed.');
       return;
     }
 
@@ -38,13 +36,12 @@ const seedAdmin = async () => {
     console.log(`Password: ${password}`);
     console.log('⚠️  CHANGE THIS PASSWORD IMMEDIATELY!');
   } catch (error: any) {
-    console.error('Error:', error.message);
-  } finally {
-    process.exit();
+    console.error('Seed error:', error.message);
   }
-
-
-
 };
 
-seedAdmin();
+// Allow running standalone: npx tsx src/scripts/seedAdmin.ts
+const isMain = process.argv[1]?.includes('seedAdmin');
+if (isMain) {
+  connectDB().then(() => seedAdmin()).then(() => process.exit(0));
+}

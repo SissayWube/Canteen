@@ -24,6 +24,7 @@ import {
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import { customersApi, Customer, CustomerFilters } from '../api/customers';
 import TableSkeleton from '../components/TableSkeleton';
+import { departmentsApi, Department as DepartmentInfo } from '../api/departments';
 import { useAuth } from '../contexts/AuthContext';
 import {
     Delete as DeleteIcon,
@@ -65,6 +66,7 @@ const Customers: React.FC = () => {
     // Statistics
 
     const [allDepartments, setAllDepartments] = useState<string[]>([]);
+    const [managedDepartments, setManagedDepartments] = useState<DepartmentInfo[]>([]);
 
     useEffect(() => {
         fetchCustomers();
@@ -88,9 +90,9 @@ const Customers: React.FC = () => {
             setTotalCustomers(response.pagination.total);
 
             // Populate department filter
-            const allCustomers = await customersApi.getAll({});
-            const uniqueDepts = Array.from(new Set(allCustomers.customers.map(c => c.department).filter(Boolean))) as string[];
-            setAllDepartments(uniqueDepts.sort());
+            const depts = await departmentsApi.getAll();
+            setManagedDepartments(depts);
+            setAllDepartments(depts.map(d => d.name));
 
         } catch (err: any) {
             setError(err?.response?.data?.error || 'Failed to fetch customers');
@@ -504,16 +506,25 @@ const Customers: React.FC = () => {
                         error={!!formErrors.name}
                         helperText={formErrors.name}
                     />
-                    <TextField
-                        label="Department"
-                        value={formData.department}
-                        onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                        fullWidth
-                        margin="normal"
-                        required
-                        error={!!formErrors.department}
-                        helperText={formErrors.department}
-                    />
+                    <FormControl fullWidth margin="normal" required error={!!formErrors.department}>
+                        <InputLabel>Department</InputLabel>
+                        <Select
+                            value={formData.department}
+                            label="Department"
+                            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                        >
+                            {managedDepartments.map((dept) => (
+                                <MenuItem key={dept._id} value={dept.name}>
+                                    {dept.name}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                        {formErrors.department && (
+                            <Typography variant="caption" color="error" sx={{ ml: 2 }}>
+                                {formErrors.department}
+                            </Typography>
+                        )}
+                    </FormControl>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleClose} disabled={loading}>

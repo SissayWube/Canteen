@@ -3,6 +3,7 @@ import OrderService from '../services/OrderService.js';
 import { printTicket } from '../services/printerService.js';
 import { io } from '../server.js';
 import Order from '../models/Order.js';
+import logger from '../config/logger.js';
 
 interface ManualOrderBody {
     customerId?: string;
@@ -75,6 +76,15 @@ export const createManualOrder = async (req: Request, res: Response, next: NextF
             });
         }
 
+        logger.info('Manual order created', {
+            orderId: order._id,
+            customerId,
+            foodItemCode,
+            operatorId: req.session.userId,
+            isGuest,
+            eventId: 'ORDER_CREATE_MANUAL'
+        });
+
         res.json({
             success: true,
             printed: printSuccess,
@@ -112,6 +122,12 @@ export const approveOrder = async (req: Request, res: Response, next: NextFuncti
             });
         }
 
+        logger.info('Order approved', {
+            orderId: order._id,
+            operatorId: req.session.userId,
+            eventId: 'ORDER_APPROVE'
+        });
+
         res.json({ success: true, printed: printSuccess });
     } catch (error) {
         next(error);
@@ -135,6 +151,13 @@ export const rejectOrder = async (req: Request, res: Response, next: NextFunctio
             });
         }
 
+        logger.info('Order rejected', {
+            orderId: req.params.id,
+            operatorId: req.session.userId,
+            reason,
+            eventId: 'ORDER_REJECT'
+        });
+
         res.json({ success: true });
     } catch (error) {
         next(error);
@@ -154,6 +177,12 @@ export const updateOrder = async (req: Request, res: Response, next: NextFunctio
         if (io) {
             io.emit('newPendingOrder', { orderId: order?._id }); // Reuse existing event to trigger refresh
         }
+
+        logger.info('Order updated', {
+            orderId: order?._id,
+            operatorId: req.session.userId,
+            eventId: 'ORDER_UPDATE'
+        });
 
         res.json({ success: true, order });
     } catch (error) {

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Typography, Select, MenuItem, Button, FormControl, InputLabel, Alert, Grid, Paper, Divider, Autocomplete, TextField, CircularProgress, Switch, FormHelperText } from '@mui/material';
 import { customersApi, Customer } from '../api/customers';
 import { foodItemsApi, FoodItem } from '../api/foodItems';
+import { departmentsApi } from '../api/departments';
 import { ordersApi } from '../api/orders';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -45,7 +46,8 @@ const ManualIssue: React.FC = () => {
     const queryClient = useQueryClient();
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
-    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [departments, setDepartments] = useState<string[]>([]);
+    const [message, setMessage] = useState<{ type: 'success' | 'warning' | 'error'; text: string } | null>(null);
     const { user } = useAuth();
 
     // React Hook Form Setup
@@ -69,7 +71,6 @@ const ManualIssue: React.FC = () => {
     const selectedFoodCode = watch('foodItemCode');
 
     // Derived data
-    const departments = Array.from(new Set(customers.map(c => c.department))).sort();
     const filteredCustomers = selectedDepartment
         ? customers.filter(c => c.department === selectedDepartment)
         : customers;
@@ -83,9 +84,11 @@ const ManualIssue: React.FC = () => {
         Promise.all([
             customersApi.getAll({ limit: 1000 }), // Get all for dropdowns
             foodItemsApi.getAll({ limit: 1000 }), // Get all for dropdowns
-        ]).then(([custResponse, foodResponse]) => {
+            departmentsApi.getAll(),
+        ]).then(([custResponse, foodResponse, depts]) => {
             setCustomers(custResponse.customers);
             setFoodItems(foodResponse.foodItems.filter(f => f.isActive));
+            setDepartments(depts.map(d => d.name));
         }).catch(err => {
             console.error("Failed to load component data", err);
             setMessage({ type: 'error', text: 'Failed to load customers or meals.' });
@@ -102,7 +105,11 @@ const ManualIssue: React.FC = () => {
                 guestName: data.isGuest ? data.guestName : undefined,
                 notes: data.notes
             });
-            setMessage({ type: 'success', text: apiData.message });
+
+            setMessage({
+                type: apiData.printed ? 'success' : 'warning',
+                text: apiData.message || (apiData.printed ? 'Order issued successfully.' : 'Order recorded, but printer failed.')
+            });
 
             // Invalidate orders and analysis cache so views refresh
             queryClient.invalidateQueries({ queryKey: ['orders'] });

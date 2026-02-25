@@ -56,7 +56,7 @@ export const ordersApi = {
         guestName?: string;
         notes?: string;
     }) => {
-        const response = await api.post<{ message: string }>('/orders/manual', data);
+        const response = await api.post<{ message: string; printed: boolean; orderId: string }>('/orders/manual', data);
         return response.data;
     },
 

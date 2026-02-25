@@ -43,6 +43,7 @@ import { HighlightedTableRow } from '../components/HighlightedTableRow';
 import OrderFilters from '../components/OrderFilters';
 import { customersApi, Customer } from '../api/customers';
 import { foodItemsApi, FoodItem } from '../api/foodItems';
+import { departmentsApi } from '../api/departments';
 
 import TableSkeleton from '../components/TableSkeleton';
 import OrderDetailsModal from '../components/OrderDetailsModal';
@@ -164,11 +165,13 @@ const Dashboard: React.FC = () => {
 
     // Fetch customers and departments for filter on mount
     React.useEffect(() => {
-        customersApi.getAll({ limit: 1000 }).then(res => {
-            setFilterCustomers(res.customers);
-            const depts = Array.from(new Set(res.customers.map(c => c.department).filter(Boolean)));
-            setDepartments(depts.sort());
-        }).catch(err => console.error('Failed to load customers for filter', err));
+        Promise.all([
+            customersApi.getAll({ limit: 1000 }),
+            departmentsApi.getAll()
+        ]).then(([custRes, depts]) => {
+            setFilterCustomers(custRes.customers);
+            setDepartments(depts.map(d => d.name));
+        }).catch(err => console.error('Failed to load filter data', err));
     }, []);
 
     // Build filters
@@ -219,10 +222,14 @@ const Dashboard: React.FC = () => {
         if (!selectedOrder) return;
         setActionLoading(true);
         try {
-            await ordersApi.approve(selectedOrder._id);
+            const apiData = await ordersApi.approve(selectedOrder._id);
             queryClient.invalidateQueries({ queryKey: ['orders'] });
             queryClient.invalidateQueries({ queryKey: ['orderStats'] });
-            setSnackbar({ open: true, message: 'Order approved successfully!', severity: 'success' });
+            setSnackbar({
+                open: true,
+                message: apiData.printed ? 'Order approved successfully!' : 'Order approved, but printer failed.',
+                severity: apiData.printed ? 'success' : 'warning'
+            });
             setSelectedOrder(null);
             setConfirmApproveOpen(false);
         } catch (error: any) {

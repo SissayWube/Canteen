@@ -53,16 +53,11 @@ export const printTicket = async (data: PrintTicketData): Promise<boolean> => {
             width,
         });
 
-        // Bypassing connection check for USB/UNC paths as it can be unreliable
-        const isTCP = process.env.PRINTER_INTERFACE.startsWith('tcp://');
-        if (isTCP) {
-            const isConnected = await printer.isPrinterConnected();
-            if (!isConnected) {
-                console.error(`Printer not connected or unreachable at: ${process.env.PRINTER_INTERFACE}`);
-                return false;
-            }
-        } else {
-            console.log(`Bypassing connection check for non-TCP interface: ${process.env.PRINTER_INTERFACE}`);
+        // Check if printer is connected
+        const isConnected = await printer.isPrinterConnected();
+        if (!isConnected) {
+            console.error(`Printer not connected or unreachable at: ${process.env.PRINTER_INTERFACE}`);
+            return false;
         }
 
         const sep = '-'.repeat(width);

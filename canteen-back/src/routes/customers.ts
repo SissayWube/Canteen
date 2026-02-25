@@ -85,6 +85,8 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
 });
 
+
+
 // Admin Only Routes
 router.use(requireAdmin);
 

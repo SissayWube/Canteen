@@ -16,8 +16,11 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     const [isConnected, setIsConnected] = useState(false);
 
     useEffect(() => {
+        // In Docker, nginx proxies /socket.io/ to the backend container,
+        // so we connect to the page's own origin. In local dev, VITE_API_URL
+        // points directly at the backend.
         const backendUrl =
-            import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+            import.meta.env.VITE_API_URL?.replace('/api', '') || window.location.origin;
 
         const socketInstance = io(backendUrl, {
             transports: ['websocket', 'polling'],

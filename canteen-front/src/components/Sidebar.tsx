@@ -23,6 +23,7 @@ import {
     BarChart as BarChartIcon,
     ManageAccounts as ManageAccountsIcon,
     Logout as LogoutIcon,
+    Business as BusinessIcon,
 } from '@mui/icons-material';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -57,6 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({ width, isCollapsed }) => {
     const adminOnlyItems = [
         { text: 'Operators', icon: <ManageAccountsIcon />, path: '/users' },
         { text: 'Customers', icon: <PeopleIcon />, path: '/customers' },
+        { text: 'Departments', icon: <BusinessIcon />, path: '/departments' },
         { text: 'Food Items', icon: <FoodIcon />, path: '/food-items' },
         { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
     ];

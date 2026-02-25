@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import { SECURITY } from '../constants/index.js';
+import logger from '../config/logger.js';
 
 const router = express.Router();
 
@@ -15,7 +16,7 @@ router.post('/login', async (req: LoginRequest, res: Response) => {
         const { username, password } = req.body;
         const user = await User.findOne({ username });
         if (!user || !(await bcrypt.compare(password, user.password))) {
-            // Optional: Log failed login attempts? Maybe too noisy.
+            logger.warn('Failed login attempt', { username, eventId: 'USER_LOGIN_FAILED' });
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
@@ -26,6 +27,7 @@ router.post('/login', async (req: LoginRequest, res: Response) => {
         req.session.save((err) => {
             if (err) return res.status(500).json({ error: 'Session save failed' });
 
+            logger.info('User login successful', { userId: user._id, username: user.username, role: user.role, eventId: 'USER_LOGIN' });
             res.json({ message: 'Login successful', user: { username: user.username, role: user.role } });
         });
     } catch (err: any) {
@@ -65,9 +67,11 @@ router.post('/change-password', async (req: Request, res: Response) => {
 
 // Logout
 router.post('/logout', (req: Request, res: Response) => {
+    const { userId, username } = req.session;
     req.session.destroy((err) => {
         if (err) return res.status(500).json({ error: 'Logout failed' });
         res.clearCookie('connect.sid');
+        logger.info('User logout', { userId, username, eventId: 'USER_LOGOUT' });
         res.json({ message: 'Logged out' });
     });
 });

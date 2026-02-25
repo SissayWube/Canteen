@@ -18,6 +18,7 @@ import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import eventRoutes from './routes/device.js';
 import analysisRoutes from './routes/analysis.js';
+import departmentRoutes from './routes/departments.js';
 import { corsOptions } from './config/cors.js';
 import deviceRoutes from './routes/device.js';
 import { fileURLToPath } from 'url';
@@ -44,8 +45,10 @@ io.on('connection', (socket) => {
 })
 
 
-// Connect to Database
-connectDB();
+import { seedAdmin } from './scripts/seedAdmin.js';
+
+// Connect to Database and seed admin user
+connectDB().then(() => seedAdmin());
 
 
 // Middleware
@@ -66,6 +69,7 @@ app.use("/api/events", eventRoutes);
 app.use('/api/food-items', foodItemRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/analysis', analysisRoutes);
+app.use('/api/departments', departmentRoutes);
 app.use('', deviceRoutes);
 
 

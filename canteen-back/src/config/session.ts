@@ -18,7 +18,7 @@ export default function getSessionMiddleware(mongooseConnection: typeof mongoose
     }),
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.COOKIE_SECURE === 'false' ? false : process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: SECURITY.SESSION_TTL_MS,
     },
